@@ -11,7 +11,7 @@
 # OIDC で github-actions-renovate ロールを引いて読む。下の id-token: write が
 # そのために要る。鍵から installation access token を作り、Renovate に渡す。
 #
-# App ID は秘密ではないのでここに直接書く。秘密鍵が無ければ App ID だけでは何も
+# Client ID は秘密ではないのでここに直接書く。秘密鍵が無ければ ID だけでは何も
 # できない。
 #
 # 使う action はすべてコミット SHA で固定する。他のリポジトリはタグのままだが、
@@ -58,7 +58,9 @@ concurrency:
 env:
   AWS_REGION: ap-northeast-1
   AWS_ROLE_TO_ASSUME: arn:aws:iam::222165754930:role/github-actions-renovate
-  RENOVATE_APP_ID: "4847603"
+  # tamura09-renovate App の Client ID (App ID は 4847603)。create-github-app-token は
+  # app-id を deprecated にしていて、client-id を使う。
+  RENOVATE_APP_CLIENT_ID: Iv23liMXUkOapjdcfgG4
   RENOVATE_APP_PRIVATE_KEY_PARAMETER: /renovate/app-private-key
 
 jobs:
@@ -138,7 +140,7 @@ jobs:
         id: app_token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
-          app-id: ${{ env.RENOVATE_APP_ID }}
+          client-id: ${{ env.RENOVATE_APP_CLIENT_ID }}
           private-key: ${{ env.RENOVATE_APP_PRIVATE_KEY }}
           owner: tamura09
 
