@@ -10,6 +10,11 @@
 # 1本だけ置いてあり、OIDC で github-actions-renovate ロールを引いて読む。
 # 下の id-token: write がそのために要る。
 #
+# 使う action はすべてコミット SHA で固定する。他のリポジトリはタグのままだが、
+# ここは Renovate を有効にした全リポジトリへの書き込み権限を持つ PAT を扱うので、
+# タグの書き換えがそのままトークンの流出になる。checkout は config.js の中身を、
+# configure-aws-credentials は SSM への到達手段そのものを握っている。
+#
 # 毎日走らせているが、PR が出るのは月曜の朝だけ。実際にいつ作るかは共有
 # プリセット (presets/default.json5) の schedule が決める。毎日走らせるのは
 # Dependency Dashboard のチェックボックス操作や、閉じた PR の作り直しに
@@ -60,7 +65,8 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        # actions/checkout v6.1.0
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
 
       - name: Check the repository list
         env:
@@ -78,7 +84,8 @@ jobs:
           echo "対象: ${RENOVATE_REPOSITORIES}"
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
+        # aws-actions/configure-aws-credentials v6.2.4
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
         with:
           role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
@@ -105,9 +112,10 @@ jobs:
           echo "::add-mask::${token}"
           echo "RENOVATE_TOKEN=${token}" >> "${GITHUB_ENV}"
 
-      # 第三者のワークフローなのでコミット SHA で固定する (v46.2.5)。この action は
-      # PAT を受け取るので、タグの書き換えがそのままトークンの流出になる。
-      # 更新は Renovate 自身が digest を追う。
+      # renovatebot/github-action v46.2.5
+      #
+      # 3つの action の digest は Renovate 自身が追う。共有プリセットが
+      # github-actions の digest 更新をグループに含めている。
       - name: Renovate
         uses: renovatebot/github-action@39b914146caeff8cd512e61c8992f1d5913af85c
         with:

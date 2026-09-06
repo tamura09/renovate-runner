@@ -51,7 +51,11 @@ fine-grained PAT を SSM の `/renovate/token` に1本だけ置き、ワーク�
 OIDC で `github-actions-renovate` ロールを引いて読む。GitHub のリポジトリ secret には
 置かない。
 
-PAT に必要な権限は次のとおり。対象は Renovate を有効にしたリポジトリすべて。
+PAT に必要な権限は次のとおり。対象は Renovate を有効にしたリポジトリすべてと、
+**このリポジトリ自身**。共有プリセットを `github>tamura09/renovate-runner//presets/default.json5`
+で参照しているので、ここを読めないと全リポジトリで設定の解決に失敗して何も動かない。
+`renovate-runner` も `enable_renovate = true` にしてあるので、対象リポジトリを1つずつ
+選ぶ場合も一覧に出てくる。
 
 | 権限 | 用途 |
 | --- | --- |
