@@ -46,14 +46,16 @@ GitHub の権限設定側に散らばるため。
 
 ## 認証
 
-Renovate は GitHub App **tamura09-renovate** (App ID `4847603`) として動く。
+Renovate は GitHub App **tamura09-renovate** として動く (App ID `4847603`、
+Client ID `Iv23liMXUkOapjdcfgG4`)。
 
 秘密鍵を SSM の `/renovate/app-private-key` に1本だけ置き、ワークフローが AWS の OIDC で
 `github-actions-renovate` ロールを引いて読む。読んだ鍵から installation access token を
 作り、Renovate に渡す。GitHub のリポジトリ secret には何も置かない。
 
-App ID は秘密ではないのでワークフローに直接書いてある。秘密鍵が無ければ App ID だけでは
-何もできない。
+Client ID は秘密ではないのでワークフローに直接書いてある。秘密鍵が無ければ ID だけでは
+何もできない。`actions/create-github-app-token` は `app-id` を deprecated にしていて、
+`client-id` を使う。
 
 App に必要な権限は次のとおり。
 
@@ -63,6 +65,7 @@ App に必要な権限は次のとおり。
 | Pull requests: read/write | PR を作る |
 | Workflows: read/write | `.github/workflows` 配下を更新する PR を push する |
 | Issues: read/write | Dependency Dashboard を作る |
+| Dependabot alerts: read | 脆弱性のある依存を schedule を無視して先に上げる |
 | Metadata: read | 他の権限の前提 |
 
 インストール先は Renovate を有効にしたリポジトリすべてと、**このリポジトリ自身**。
