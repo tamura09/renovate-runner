@@ -1,0 +1,124 @@
+# アカウント全体の依存更新をまとめて回す Renovate。
+#
+# 各リポジトリにワークフローは置かない。ここ1本が RENOVATE_REPOSITORIES に
+# 載っているリポジトリを順に見て、更新があれば PR を作る。
+#
+# 対象リポジトリの一覧は tamura09/github-terraform が Actions の変数に書く。
+# locals.tf の enable_renovate が true のリポジトリだけが載る。既定は無効。
+#
+# PAT はこのリポジトリの secret には置かない。AWS の SSM (/renovate/token) に
+# 1本だけ置いてあり、OIDC で github-actions-renovate ロールを引いて読む。
+# 下の id-token: write がそのために要る。
+#
+# 毎日走らせているが、PR が出るのは月曜の朝だけ。実際にいつ作るかは共有
+# プリセット (presets/default.json5) の schedule が決める。毎日走らせるのは
+# Dependency Dashboard のチェックボックス操作や、閉じた PR の作り直しに
+# 週1では反応が遅いため。
+name: Renovate
+
+on:
+  schedule:
+    # 08:00 JST。プリセットの schedule ("before 9am on monday") に収まる時刻。
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "PR を作らず、何をするかだけログに出す"
+        type: boolean
+        default: false
+      log_level:
+        description: "ログの詳細度"
+        type: choice
+        options:
+          - info
+          - debug
+        default: info
+
+# このワークフロー自体は GitHub に何も書かない。リポジトリを書き換えるのは
+# Renovate が使う PAT の権限で、GITHUB_TOKEN ではない。
+permissions:
+  contents: read
+  id-token: write
+
+# 同時に2本走らせない。同じリポジトリを2つのプロセスが触ると PR が二重になる。
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-northeast-1
+  AWS_ROLE_TO_ASSUME: arn:aws:iam::222165754930:role/github-actions-renovate
+  RENOVATE_TOKEN_PARAMETER: /renovate/token
+
+jobs:
+  renovate:
+    name: Renovate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check the repository list
+        env:
+          RENOVATE_REPOSITORIES: ${{ vars.RENOVATE_REPOSITORIES }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${RENOVATE_REPOSITORIES}" ]; then
+            echo "::error::RENOVATE_REPOSITORIES が空です。" \
+                 "tamura09/github-terraform の locals.tf で enable_renovate を true にして" \
+                 "apply すると、この変数に対象リポジトリが載ります。"
+            exit 1
+          fi
+
+          echo "対象: ${RENOVATE_REPOSITORIES}"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Renovate は GitHub の token でしか認証できません。リポジトリの secret には
+      # 置かず、SSM から読みます。
+      - name: Read the Renovate token from SSM
+        run: |
+          set -euo pipefail
+
+          token="$(aws ssm get-parameter \
+            --name "${RENOVATE_TOKEN_PARAMETER}" \
+            --with-decryption \
+            --query 'Parameter.Value' \
+            --output text)"
+
+          if [ -z "${token}" ] || [ "${token}" = "MANAGED_OUTSIDE_TERRAFORM" ]; then
+            echo "::error::${RENOVATE_TOKEN_PARAMETER} (${AWS_REGION}) はまだ実際の token で埋められていません。" \
+                 "fine-grained PAT (Contents / Pull requests / Workflows / Issues: read/write) を発行し、" \
+                 "aws ssm put-parameter --region ${AWS_REGION} --overwrite で投入してください。"
+            exit 1
+          fi
+
+          echo "::add-mask::${token}"
+          echo "RENOVATE_TOKEN=${token}" >> "${GITHUB_ENV}"
+
+      # 第三者のワークフローなのでコミット SHA で固定する (v46.2.5)。この action は
+      # PAT を受け取るので、タグの書き換えがそのままトークンの流出になる。
+      # 更新は Renovate 自身が digest を追う。
+      - name: Renovate
+        uses: renovatebot/github-action@39b914146caeff8cd512e61c8992f1d5913af85c
+        with:
+          configurationFile: config.js
+          token: ${{ env.RENOVATE_TOKEN }}
+        env:
+          RENOVATE_REPOSITORIES: ${{ vars.RENOVATE_REPOSITORIES }}
+
+          # slim イメージなので、terraform や npm は必要になった時点で入れる。
+          # これが無いと .terraform.lock.hcl や package-lock.json を更新できない。
+          RENOVATE_BINARY_SOURCE: install
+
+          RENOVATE_DRY_RUN: ${{ inputs.dry_run && 'full' || 'null' }}
+          LOG_LEVEL: ${{ inputs.log_level || 'info' }}

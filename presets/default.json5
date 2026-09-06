@@ -1,0 +1,58 @@
+// 全リポジトリに当たる共通ルール。config.js が extends している。
+//
+// 各リポジトリの renovate.json でも同じものを extends しているが、二重に読んでも
+// 結果は変わらない。リポジトリ側のファイルは「何が当たっているか」をリポジトリを
+// 見ただけで分かるようにするためと、固有の設定を足す場所として置いてある。
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+
+  extends: [
+    'config:recommended',
+
+    // 更新の一覧と、止まっている更新の理由を Issue 1本にまとめる。
+    ':dependencyDashboard',
+
+    // コミットメッセージを chore(deps): ... にする。Dependabot でも
+    // prefix: chore / include: scope を使っていた。
+    ':semanticCommitTypeAll(chore)',
+  ],
+
+  timezone: 'Asia/Tokyo',
+
+  // ワークフローは毎日走るが、PR を作るのは月曜の朝だけ。Dependabot の
+  // weekly / monday と揃えてある。
+  schedule: ['before 9am on monday'],
+
+  // Dependabot の open-pull-requests-limit: 5 と同じ。
+  prConcurrentLimit: 5,
+  prHourlyLimit: 0,
+
+  labels: ['dependencies'],
+
+  packageRules: [
+    // メジャーはグループに入れず個別の PR にする。破壊的変更を1つずつ読むため。
+    // マイナーとパッチはまとめて1本にする。
+    {
+      matchManagers: ['github-actions'],
+      matchUpdateTypes: ['minor', 'patch', 'digest'],
+      groupName: 'github-actions',
+      addLabels: ['github-actions'],
+    },
+    {
+      matchManagers: ['github-actions'],
+      matchUpdateTypes: ['major'],
+      addLabels: ['github-actions'],
+    },
+    {
+      matchManagers: ['terraform', 'terraform-version'],
+      matchUpdateTypes: ['minor', 'patch'],
+      groupName: 'terraform providers',
+      addLabels: ['terraform'],
+    },
+    {
+      matchManagers: ['terraform', 'terraform-version'],
+      matchUpdateTypes: ['major'],
+      addLabels: ['terraform'],
+    },
+  ],
+}
