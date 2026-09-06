@@ -6,14 +6,19 @@
 # 対象リポジトリの一覧は tamura09/github-terraform が Actions の変数に書く。
 # locals.tf の enable_renovate が true のリポジトリだけが載る。既定は無効。
 #
-# PAT はこのリポジトリの secret には置かない。AWS の SSM (/renovate/token) に
-# 1本だけ置いてあり、OIDC で github-actions-renovate ロールを引いて読む。
-# 下の id-token: write がそのために要る。
+# Renovate は GitHub App (tamura09-renovate) として動く。秘密鍵はこのリポジトリの
+# secret には置かない。AWS の SSM (/renovate/app-private-key) に1本だけ置いてあり、
+# OIDC で github-actions-renovate ロールを引いて読む。下の id-token: write が
+# そのために要る。鍵から installation access token を作り、Renovate に渡す。
+#
+# App ID は秘密ではないのでここに直接書く。秘密鍵が無ければ App ID だけでは何も
+# できない。
 #
 # 使う action はすべてコミット SHA で固定する。他のリポジトリはタグのままだが、
-# ここは Renovate を有効にした全リポジトリへの書き込み権限を持つ PAT を扱うので、
-# タグの書き換えがそのままトークンの流出になる。checkout は config.js の中身を、
-# configure-aws-credentials は SSM への到達手段そのものを握っている。
+# ここは Renovate を有効にした全リポジトリへ書き込める token を扱うので、タグの
+# 書き換えがそのままトークンの流出になる。checkout は config.js の中身を、
+# configure-aws-credentials は SSM への到達手段を、create-github-app-token は
+# 秘密鍵そのものを握っている。
 #
 # 毎日走らせているが、PR が出るのは月曜の朝だけ。実際にいつ作るかは共有
 # プリセット (presets/default.json5) の schedule が決める。毎日走らせるのは
@@ -40,7 +45,7 @@ on:
         default: info
 
 # このワークフロー自体は GitHub に何も書かない。リポジトリを書き換えるのは
-# Renovate が使う PAT の権限で、GITHUB_TOKEN ではない。
+# App の installation token の権限で、GITHUB_TOKEN ではない。
 permissions:
   contents: read
   id-token: write
@@ -53,7 +58,8 @@ concurrency:
 env:
   AWS_REGION: ap-northeast-1
   AWS_ROLE_TO_ASSUME: arn:aws:iam::222165754930:role/github-actions-renovate
-  RENOVATE_TOKEN_PARAMETER: /renovate/token
+  RENOVATE_APP_ID: "4847603"
+  RENOVATE_APP_PRIVATE_KEY_PARAMETER: /renovate/app-private-key
 
 jobs:
   renovate:
@@ -90,27 +96,51 @@ jobs:
           role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # Renovate は GitHub の token でしか認証できません。リポジトリの secret には
-      # 置かず、SSM から読みます。
-      - name: Read the Renovate token from SSM
+      # App の秘密鍵はリポジトリの secret には置かず、SSM から読みます。
+      - name: Read the GitHub App private key from SSM
         run: |
           set -euo pipefail
 
-          token="$(aws ssm get-parameter \
-            --name "${RENOVATE_TOKEN_PARAMETER}" \
+          key="$(aws ssm get-parameter \
+            --name "${RENOVATE_APP_PRIVATE_KEY_PARAMETER}" \
             --with-decryption \
             --query 'Parameter.Value' \
             --output text)"
 
-          if [ -z "${token}" ] || [ "${token}" = "MANAGED_OUTSIDE_TERRAFORM" ]; then
-            echo "::error::${RENOVATE_TOKEN_PARAMETER} (${AWS_REGION}) はまだ実際の token で埋められていません。" \
-                 "fine-grained PAT (Contents / Pull requests / Workflows / Issues: read/write) を発行し、" \
+          if [ -z "${key}" ] || [ "${key}" = "MANAGED_OUTSIDE_TERRAFORM" ]; then
+            echo "::error::${RENOVATE_APP_PRIVATE_KEY_PARAMETER} (${AWS_REGION}) はまだ実際の鍵で埋められていません。" \
+                 "tamura09-renovate App の private key を発行し、" \
                  "aws ssm put-parameter --region ${AWS_REGION} --overwrite で投入してください。"
             exit 1
           fi
 
-          echo "::add-mask::${token}"
-          echo "RENOVATE_TOKEN=${token}" >> "${GITHUB_ENV}"
+          # PEM は複数行なので1行ずつマスクします。::add-mask:: は改行を含む値を
+          # 1つのマスクとして扱えません。
+          while IFS= read -r line; do
+            [ -n "${line}" ] && echo "::add-mask::${line}"
+          done <<< "${key}"
+
+          {
+            echo "RENOVATE_APP_PRIVATE_KEY<<PEM_EOF"
+            echo "${key}"
+            echo "PEM_EOF"
+          } >> "${GITHUB_ENV}"
+
+      # 秘密鍵から installation access token を作ります。owner を渡すと、この
+      # アカウントに App がインストールされているリポジトリすべてを対象にした
+      # token になります。渡さないと実行中のリポジトリだけになり、他のリポジトリを
+      # 更新できません。
+      #
+      # token の寿命は1時間です。1回の実行がそれを超えると途中で失効します。
+      #
+      # actions/create-github-app-token v3.2.0
+      - name: Mint an installation token
+        id: app_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ env.RENOVATE_APP_ID }}
+          private-key: ${{ env.RENOVATE_APP_PRIVATE_KEY }}
+          owner: tamura09
 
       # renovatebot/github-action v46.2.5
       #
@@ -120,7 +150,7 @@ jobs:
         uses: renovatebot/github-action@39b914146caeff8cd512e61c8992f1d5913af85c
         with:
           configurationFile: config.js
-          token: ${{ env.RENOVATE_TOKEN }}
+          token: ${{ steps.app_token.outputs.token }}
         env:
           RENOVATE_REPOSITORIES: ${{ vars.RENOVATE_REPOSITORIES }}
 

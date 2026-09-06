@@ -21,8 +21,14 @@ module.exports = {
   // 要らない。
   requireConfig: 'optional',
 
-  // PAT の持ち主のメールアドレスを晒さないよう、noreply を明示する。
-  gitAuthor: 'tamura09 <82946547+tamura09@users.noreply.github.com>',
+  // GitHub App (tamura09-renovate) として動く。PR の作成者もコミットの author も
+  // bot になるので、持ち主が手で作った PR と機械的に区別できる。
+  //
+  // username は Renovate が「自分が作った PR」を見分けるのに使う。ID は
+  // `gh api /users/tamura09-renovate%5Bbot%5D --jq .id` から。
+  username: 'tamura09-renovate[bot]',
+  gitAuthor:
+    'tamura09-renovate[bot] <325525690+tamura09-renovate[bot]@users.noreply.github.com>',
 
   // 共通のルール。リポジトリ側で extends しなくても当たる。
   extends: ['github>tamura09/renovate-runner//presets/default.json5'],
