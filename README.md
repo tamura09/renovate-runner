@@ -44,18 +44,18 @@ GitHub の権限設定側に散らばるため。
 - コミットメッセージは `chore(deps): ...`
 - 更新の一覧と止まっている理由は Dependency Dashboard の Issue にまとまる
 
-## トークン
+## 認証
 
-Renovate は GitHub の token でしか認証できず、AWS の OIDC では代替できない。
-fine-grained PAT を SSM の `/renovate/token` に1本だけ置き、ワークフローが AWS の
-OIDC で `github-actions-renovate` ロールを引いて読む。GitHub のリポジトリ secret には
-置かない。
+Renovate は GitHub App **tamura09-renovate** (App ID `4847603`) として動く。
 
-PAT に必要な権限は次のとおり。対象は Renovate を有効にしたリポジトリすべてと、
-**このリポジトリ自身**。共有プリセットを `github>tamura09/renovate-runner//presets/default.json5`
-で参照しているので、ここを読めないと全リポジトリで設定の解決に失敗して何も動かない。
-`renovate-runner` も `enable_renovate = true` にしてあるので、対象リポジトリを1つずつ
-選ぶ場合も一覧に出てくる。
+秘密鍵を SSM の `/renovate/app-private-key` に1本だけ置き、ワークフローが AWS の OIDC で
+`github-actions-renovate` ロールを引いて読む。読んだ鍵から installation access token を
+作り、Renovate に渡す。GitHub のリポジトリ secret には何も置かない。
+
+App ID は秘密ではないのでワークフローに直接書いてある。秘密鍵が無ければ App ID だけでは
+何もできない。
+
+App に必要な権限は次のとおり。
 
 | 権限 | 用途 |
 | --- | --- |
@@ -65,13 +65,20 @@ PAT に必要な権限は次のとおり。対象は Renovate を有効にした
 | Issues: read/write | Dependency Dashboard を作る |
 | Metadata: read | 他の権限の前提 |
 
+インストール先は Renovate を有効にしたリポジトリすべてと、**このリポジトリ自身**。
+共有プリセットを `github>tamura09/renovate-runner//presets/default.json5` で参照して
+いるので、ここを読めないと全リポジトリで設定の解決に失敗して何も動かない。
+
 ```bash
-aws ssm put-parameter --region ap-northeast-1 --name /renovate/token \
-  --type SecureString --overwrite --value "$(pbpaste)"
+aws ssm put-parameter --region ap-northeast-1 --name /renovate/app-private-key \
+  --type SecureString --overwrite --value "$(cat <ダウンロードした .pem>)"
 ```
 
 `--region` を省くと CLI の既定リージョンに同名のパラメータが新しく作られて成功するので、
 必ず付けること。
+
+installation access token の寿命は1時間。1回の実行がそれを超えると途中で失効する。
+今の規模では届かないが、対象リポジトリが増えて実行が長引くようなら分割する。
 
 ## 動かす
 
@@ -88,12 +95,17 @@ aws ssm put-parameter --region ap-northeast-1 --name /renovate/token \
 
 ## PR は誰の名義で来るか
 
-PAT の持ち主、つまり自分の名義で来る。GitHub App ではないので `renovate[bot]` には
-ならない。自分の PR は自分で approve できないが、ブランチ保護の承認数は0にしてあるので
-マージは止まらない。
+`tamura09-renovate[bot]`。コミットの author も同じ。持ち主が手で作った PR と機械的に
+区別できる。
 
 Dependabot の PR と違って、通常の PR と同じように CI が走る。Dependabot の PR では
 secrets も OIDC も渡されず、AWS を触るワークフローが必ず落ちていた。それが無くなる。
+
+Claude のレビューは付かない。`tamura09/claude-pr-review` の既定の `skip_authors` に
+入れてある。依存の更新 PR は差分が機械的で、上流のリリースノートを読み込ませる意味も
+薄いため。レビューさせたいリポジトリは呼び出し側で `skip_authors` を上書きする。
+
+`monstdb` だけは自前の自動マージ機構 (`renovate-auto-review.yml`) が別に走る。
 
 ## Dependabot
 
