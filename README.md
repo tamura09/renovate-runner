@@ -1,41 +1,15 @@
-# repo-template
+# renovate-runner
 
-新しいリポジトリの雛形。`.github/workflows/pr-review.yml` だけが入っている。
+アカウント全体の依存更新をまとめて回す Renovate の実行役。
 
-## 使い方
+各リポジトリに Renovate のワークフローは置かない。ここ1本が対象リポジトリを順に
+見て、更新があれば PR を作る。
 
-```bash
-gh repo create tamura09/<NAME> --private --template tamura09/repo-template
-```
+## 対象リポジトリの決め方
 
-作ったあとに [tamura09/github-terraform](https://github.com/tamura09/github-terraform)
-の `locals.tf` へ追加すると、デフォルトブランチと `main` のブランチ保護、マージ方法が
-Terraform の管理下に入る。追加のしかたはそちらの README にある。
-
-## 入っているもの
-
-### `.github/workflows/pr-review.yml`
-
-`pr-review.yml` は [tamura09/claude-pr-review](https://github.com/tamura09/claude-pr-review)
-の再利用可能ワークフローを呼ぶだけ。PR ごとに Claude がレビューを投稿し、
-`claude-review` のチェックを出す。マージも承認もしない。
-
-OAuth トークンはリポジトリの secret には置かない。AWS の SSM に1本だけ置いてあり、
-呼び出されたワークフローが OIDC で読む。だから新しいリポジトリでも secret の登録は
-要らない。
-
-### `renovate.json`
-
-依存の更新を [tamura09/renovate-runner](https://github.com/tamura09/renovate-runner)
-に任せるための設定。共有プリセットを extends するだけで、リポジトリ固有の指定は
-書かない。
-
-**置いてあるだけでは動かない**。実際に更新 PR が来るのは
-[tamura09/github-terraform](https://github.com/tamura09/github-terraform) の
-`locals.tf` で `enable_renovate = true` を書いたリポジトリだけ。既定は無効なので、
-テンプレートから作ったままでは Renovate は走らない。
-
-有効にしたくなったら `locals.tf` にフラグを足す。このファイルは触らなくてよい。
+対象は [tamura09/github-terraform](https://github.com/tamura09/github-terraform) が
+決める。`locals.tf` の `enable_renovate` を `true` にして apply すると、このリポジトリの
+Actions 変数 `RENOVATE_REPOSITORIES` にそのリポジトリが載る。**既定は無効**。
 
 ```hcl
     <NAME> = {
@@ -43,11 +17,85 @@ OAuth トークンはリポジトリの secret には置かない。AWS の SSM 
     }
 ```
 
-言語ごとの設定 (npm のグループ分けなど) が要るときは、このファイルに
-`packageRules` を足すのではなく、まず共有プリセット側を直すか検討する。
-1リポジトリにしか当てはまらない設定だけをここに書く。
+止めたいときも同じ場所で `false` にする。リポジトリ側のファイルを消す必要はない。
 
-## ここに置かないもの
+`autodiscover` は使わない。PAT から見えるリポジトリを全部拾ってしまい、どこを回すかが
+GitHub の権限設定側に散らばるため。
 
-言語ごとのCIやデプロイは、リポジトリによって中身が違いすぎるので入れていない。
-必要になったら既存のリポジトリからコピーする。
+## 設定の置き場所
+
+| ファイル | 何を書くか |
+| --- | --- |
+| [config.js](config.js) | Renovate 自体の設定 (platform、対象の渡し方、gitAuthor)。全リポジトリに継承される |
+| [presets/default.json5](presets/default.json5) | 全リポジトリに当たる共通ルール (スケジュール、グループ分け、ラベル) |
+| 各リポジトリの `renovate.json` | そのリポジトリ固有の設定だけ |
+
+共通ルールは `config.js` の `extends` から全リポジトリに当たる。各リポジトリの
+`renovate.json` は同じプリセットを extends しているが、二重に読んでも結果は変わらない。
+リポジトリを見ただけで何が当たっているか分かるようにと、固有の設定を足す場所として
+置いてある。**無くても動く**。
+
+共通の形は次のとおり。
+
+- PR が出るのは月曜の朝だけ (`before 9am on monday`、`Asia/Tokyo`)
+- 同時に開く PR は5本まで
+- GitHub Actions と Terraform provider は、マイナーとパッチをまとめて1本にする
+- メジャーは個別の PR にする。破壊的変更を1つずつ読むため
+- コミットメッセージは `chore(deps): ...`
+- 更新の一覧と止まっている理由は Dependency Dashboard の Issue にまとまる
+
+## トークン
+
+Renovate は GitHub の token でしか認証できず、AWS の OIDC では代替できない。
+fine-grained PAT を SSM の `/renovate/token` に1本だけ置き、ワークフローが AWS の
+OIDC で `github-actions-renovate` ロールを引いて読む。GitHub のリポジトリ secret には
+置かない。
+
+PAT に必要な権限は次のとおり。対象は Renovate を有効にしたリポジトリすべてと、
+**このリポジトリ自身**。共有プリセットを `github>tamura09/renovate-runner//presets/default.json5`
+で参照しているので、ここを読めないと全リポジトリで設定の解決に失敗して何も動かない。
+`renovate-runner` も `enable_renovate = true` にしてあるので、対象リポジトリを1つずつ
+選ぶ場合も一覧に出てくる。
+
+| 権限 | 用途 |
+| --- | --- |
+| Contents: read/write | ブランチを作って push する |
+| Pull requests: read/write | PR を作る |
+| Workflows: read/write | `.github/workflows` 配下を更新する PR を push する |
+| Issues: read/write | Dependency Dashboard を作る |
+| Metadata: read | 他の権限の前提 |
+
+```bash
+aws ssm put-parameter --region ap-northeast-1 --name /renovate/token \
+  --type SecureString --overwrite --value "$(pbpaste)"
+```
+
+`--region` を省くと CLI の既定リージョンに同名のパラメータが新しく作られて成功するので、
+必ず付けること。
+
+## 動かす
+
+毎日 08:00 JST に走る。ただし PR が出るのは月曜の朝だけで、他の曜日はプリセットの
+`schedule` に弾かれて何もしない。毎日走らせているのは、Dependency Dashboard の
+チェックボックス操作や、閉じた PR の作り直しに週1では反応が遅いため。
+
+手で走らせるときは Actions から `Renovate` を `workflow_dispatch` する。`dry_run` を
+付けると PR を作らず、何をするかだけログに出る。`log_level` を `debug` にすると
+どのリポジトリで何を見たかが全部出る。
+
+`schedule` は「PR を作ってよい時間帯」なので、手で走らせても月曜の朝でなければ PR は
+出ない。今すぐ作らせたいときは Dependency Dashboard の該当項目にチェックを入れる。
+
+## PR は誰の名義で来るか
+
+PAT の持ち主、つまり自分の名義で来る。GitHub App ではないので `renovate[bot]` には
+ならない。自分の PR は自分で approve できないが、ブランチ保護の承認数は0にしてあるので
+マージは止まらない。
+
+Dependabot の PR と違って、通常の PR と同じように CI が走る。Dependabot の PR では
+secrets も OIDC も渡されず、AWS を触るワークフローが必ず落ちていた。それが無くなる。
+
+## Dependabot
+
+使わない。以前 `aws-terraform` / `hetzner-terraform` / `monstdb` に入れていたが、
+Renovate に寄せた。
