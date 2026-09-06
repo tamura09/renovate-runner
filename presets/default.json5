@@ -29,7 +29,26 @@
 
   labels: ['dependencies'],
 
+  // 脆弱性が見つかった依存だけは schedule も待機期間も無視して先に上げる。
+  // 待たせる理由が「様子を見る」ことなので、既に既知の穴が空いている場合には
+  // 当てはまらない。
+  vulnerabilityAlerts: {
+    schedule: null,
+    minimumReleaseAge: null,
+  },
+
   packageRules: [
+    // npm はサプライチェーン攻撃の踏み台にされやすい。侵害された版が公開されて
+    // から取り下げられるまでは、たいてい最初の数日。そこに触らないよう、出てから
+    // 1週間経った版だけを対象にする。
+    //
+    // 待っている間は PR も出ない。internalChecksFilter の既定が strict なので、
+    // 期間を満たさない版は候補から外れ、1つ前の版で PR を作ることもしない。
+    {
+      matchManagers: ['npm'],
+      minimumReleaseAge: '7 days',
+    },
+
     // メジャーはグループに入れず個別の PR にする。破壊的変更を1つずつ読むため。
     // マイナーとパッチはまとめて1本にする。
     {
