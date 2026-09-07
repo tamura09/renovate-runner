@@ -69,8 +69,19 @@ App に必要な権限は次のとおり。
 | Pull requests: read/write | PR を作る |
 | Workflows: read/write | `.github/workflows` 配下を更新する PR を push する |
 | Issues: read/write | Dependency Dashboard を作る |
+| Commit statuses: read | 既にあるブランチの前回の結果を見る |
+| Checks: read | 同上。ステータスと check run の両方を見る |
 | Dependabot alerts: read | 脆弱性のある依存を schedule を無視して先に上げる |
 | Metadata: read | 他の権限の前提 |
+
+Commit statuses と Checks が無いと、`renovate/` のブランチが既にあるリポジトリだけが
+次のように落ちる。リポジトリの読み書きはできているので「アクセス権が無い」ように見えず、
+原因が分かりにくい。
+
+```
+WARN: Integration unauthorized - aborting (repository=tamura09/monspot)
+  GET /repos/tamura09/monspot/commits/<sha>/statuses → 403
+```
 
 インストール先は Renovate を有効にしたリポジトリすべてと、**このリポジトリ自身**。
 共有プリセットを `github>tamura09/renovate-runner//presets/default.json5` で参照して
