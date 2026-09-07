@@ -17,6 +17,14 @@
     ':semanticCommitTypeAll(chore)',
   ],
 
+  // 上の :semanticCommitTypeAll(chore) は「semantic commit を使うなら type は chore」
+  // という指定でしかない。使うかどうかは既定では自動判定で、リポジトリの既存コミットが
+  // Conventional Commits で揃っているかを見る。そのため初回の実行では
+  // github-terraform だけ chore(deps): が付き、他は素のタイトルになった。
+  //
+  // Dependabot は全リポジトリで prefix を付けていた。揃える。
+  semanticCommits: 'enabled',
+
   timezone: 'Asia/Tokyo',
 
   // ワークフローは毎日走るが、PR を作るのは月曜だけ。Dependabot の weekly / monday と
