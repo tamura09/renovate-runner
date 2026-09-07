@@ -69,19 +69,28 @@ App に必要な権限は次のとおり。
 | Pull requests: read/write | PR を作る |
 | Workflows: read/write | `.github/workflows` 配下を更新する PR を push する |
 | Issues: read/write | Dependency Dashboard を作る |
-| Commit statuses: read | 既にあるブランチの前回の結果を見る |
-| Checks: read | 同上。ステータスと check run の両方を見る |
+| Commit statuses: read/write | 既にあるブランチの前回の結果を見る。加えて、待機中の npm 更新の残り日数を renovate/stability-days ステータスとして書く |
+| Checks: read | 前回の結果のうち check run の側を見る |
 | Dependabot alerts: read | 脆弱性のある依存を schedule を無視して先に上げる |
 | Metadata: read | 他の権限の前提 |
 
-Commit statuses と Checks が無いと、`renovate/` のブランチが既にあるリポジトリだけが
-次のように落ちる。リポジトリの読み書きはできているので「アクセス権が無い」ように見えず、
-原因が分かりにくい。
+Commit statuses が読めないと、`renovate/` のブランチが既にあるリポジトリだけが落ちる。
 
 ```
 WARN: Integration unauthorized - aborting (repository=tamura09/monspot)
   GET /repos/tamura09/monspot/commits/<sha>/statuses → 403
 ```
+
+書けないと、npm を持つリポジトリだけが落ちる。`minimumReleaseAge` で待たせている更新の
+残り日数を `renovate/stability-days` というステータスに書くため。
+
+```
+INFO: Repository has changed during renovation - aborting (repository=tamura09/monspot)
+  POST /repos/tamura09/monspot/statuses/<sha> → 403
+```
+
+どちらもリポジトリ自体の読み書きはできているので「アクセス権が無い」ようには見えず、
+debug ログを追わないと原因が分からない。
 
 インストール先は Renovate を有効にしたリポジトリすべてと、**このリポジトリ自身**。
 共有プリセットを `github>tamura09/renovate-runner//presets/default.json5` で参照して
