@@ -37,7 +37,7 @@ GitHub の権限設定側に散らばるため。
 
 共通の形は次のとおり。
 
-- PR が出るのは月曜の朝だけ (`before 9am on monday`、`Asia/Tokyo`)
+- PR が出るのは月曜だけ (`on monday`、`Asia/Tokyo`)
 - **npm は公開から1週間経った版だけを上げる** (`minimumReleaseAge: 7 days`)。
   サプライチェーン攻撃で侵害された版が取り下げられるのはたいてい最初の数日なので、
   そこに触らない。待っている間は PR も出ない (1つ前の版で PR を作ることもしない)
@@ -89,16 +89,20 @@ installation access token の寿命は1時間。1回の実行がそれを超え�
 
 ## 動かす
 
-毎日 08:00 JST に走る。ただし PR が出るのは月曜の朝だけで、他の曜日はプリセットの
+毎日 08:00 JST に走る。ただし PR が出るのは月曜だけで、他の曜日はプリセットの
 `schedule` に弾かれて何もしない。毎日走らせているのは、Dependency Dashboard の
 チェックボックス操作や、閉じた PR の作り直しに週1では反応が遅いため。
+
+`schedule` を時刻で絞っていないのは、**GitHub Actions の `schedule` が遅れる**ため。
+2026-09-07 は 08:00 JST 起動のつもりが 09:48 JST に走り、当時の `before 9am on monday`
+を外して PR が1本も出なかった。1〜2時間の遅延は普通に起きるので、曜日だけで判定する。
 
 手で走らせるときは Actions から `Renovate` を `workflow_dispatch` する。`dry_run` を
 付けると PR を作らず、何をするかだけログに出る。`log_level` を `debug` にすると
 どのリポジトリで何を見たかが全部出る。
 
-`schedule` は「PR を作ってよい時間帯」なので、手で走らせても月曜の朝でなければ PR は
-出ない。今すぐ作らせたいときは Dependency Dashboard の該当項目にチェックを入れる。
+`schedule` は「PR を作ってよい期間」なので、手で走らせても月曜でなければ PR は出ない。
+今すぐ作らせたいときは Dependency Dashboard の該当項目にチェックを入れる。
 
 ## PR は誰の名義で来るか
 
