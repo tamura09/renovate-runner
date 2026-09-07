@@ -45,7 +45,7 @@ GitHub の権限設定側に散らばるため。
 - 同時に開く PR は5本まで
 - GitHub Actions と Terraform provider は、マイナーとパッチをまとめて1本にする
 - メジャーは個別の PR にする。破壊的変更を1つずつ読むため
-- コミットメッセージは `chore(deps): ...`
+- コミットメッセージは `chore(deps): ...` (`semanticCommits: enabled` で全リポジトリ強制)
 - 更新の一覧と止まっている理由は Dependency Dashboard の Issue にまとまる
 
 ## 認証
