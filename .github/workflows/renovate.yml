@@ -20,7 +20,7 @@
 # configure-aws-credentials は SSM への到達手段を、create-github-app-token は
 # 秘密鍵そのものを握っている。
 #
-# 毎日走らせているが、PR が出るのは月曜の朝だけ。実際にいつ作るかは共有
+# 毎日走らせているが、PR が出るのは月曜だけ。実際にいつ作るかは共有
 # プリセット (presets/default.json5) の schedule が決める。毎日走らせるのは
 # Dependency Dashboard のチェックボックス操作や、閉じた PR の作り直しに
 # 週1では反応が遅いため。
@@ -28,7 +28,9 @@ name: Renovate
 
 on:
   schedule:
-    # 08:00 JST。プリセットの schedule ("before 9am on monday") に収まる時刻。
+    # 08:00 JST。JST の月曜に走るのはこの1回 (日曜 23:00Z) で、プリセットの
+    # schedule ("on monday") はその日1日が窓なので、多少遅れても収まる。
+    # GitHub Actions の schedule は1〜2時間ずれることがある。
     - cron: "0 23 * * *"
   workflow_dispatch:
     inputs:
