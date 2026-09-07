@@ -19,9 +19,14 @@
 
   timezone: 'Asia/Tokyo',
 
-  // ワークフローは毎日走るが、PR を作るのは月曜の朝だけ。Dependabot の
-  // weekly / monday と揃えてある。
-  schedule: ['before 9am on monday'],
+  // ワークフローは毎日走るが、PR を作るのは月曜だけ。Dependabot の weekly / monday と
+  // 揃えてある。
+  //
+  // 時刻で絞らないのは、GitHub Actions の schedule が遅れるため。2026-09-07 は
+  // 08:00 JST 起動のつもりが 09:48 JST に走り、"before 9am on monday" を外して PR が
+  // 1本も出なかった。1〜2時間の遅延は普通に起きるので、時刻の窓を持たせると
+  // 週によって出たり出なかったりする。曜日だけで判定する。
+  schedule: ['on monday'],
 
   // Dependabot の open-pull-requests-limit: 5 と同じ。
   prConcurrentLimit: 5,
