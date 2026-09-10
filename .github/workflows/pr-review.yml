@@ -49,5 +49,7 @@ jobs:
     # (presets/default.json5) が tamura09/** の digest 更新として自動で追うように
     # なったので、もう理由にならない。
     #
-    # tamura09/claude-pr-review v1
-    uses: tamura09/claude-pr-review/.github/workflows/pr-review.yml@51c2815dac669475a6b1bc4ed602b064bdde30ee
+    # 版のコメントは同じ行の末尾に置く。Renovate の github-actions マネージャは
+    # そこからしかタグを読まない。前の行に書くと、どのタグの digest なのかを
+    # 解決できず、v1 ではなくデフォルトブランチの先頭を追いにいく。
+    uses: tamura09/claude-pr-review/.github/workflows/pr-review.yml@51c2815dac669475a6b1bc4ed602b064bdde30ee # v1
