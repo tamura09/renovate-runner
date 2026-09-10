@@ -37,7 +37,16 @@ GitHub の権限設定側に散らばるため。
 
 共通の形は次のとおり。
 
-- PR が出るのは月曜だけ (`on monday`、`Asia/Tokyo`)
+- PR が出るのは月曜だけ (`on monday`、`Asia/Tokyo`)。例外が3つあり、脆弱性のある依存、
+  Action をコミット SHA に固定する PR、`tamura09/**` の Action の digest 更新は
+  曜日を待たずに出る
+- **Action の参照はコミット SHA に固定する** (`helpers:pinGitHubActionDigests`)。
+  タグは付け替えられるので、`@v1` のままだと「その時点で誰かがタグを指していた任意の
+  コード」をワークフローの権限で動かすことになる。Renovate が `@<sha> # v1` に書き換え、
+  以後はタグの移動を digest 更新として追う
+- 固定するだけの PR (`pin` / `pinDigest`) と、`tamura09/**` の Action の digest 更新は
+  自動マージする。前者は実行されるコードが変わらず、後者は変更そのものを元の
+  リポジトリの PR で読んでいる。**第三者の Action の digest は自動マージしない**
 - **npm は公開から1週間経った版だけを上げる** (`minimumReleaseAge: 7 days`)。
   サプライチェーン攻撃で侵害された版が取り下げられるのはたいてい最初の数日なので、
   そこに触らない。待っている間は PR も出ない (1つ前の版で PR を作ることもしない)
@@ -109,9 +118,12 @@ installation access token の寿命は1時間。1回の実行がそれを超え�
 
 ## 動かす
 
-毎日 08:00 JST に走る。ただし PR が出るのは月曜だけで、他の曜日はプリセットの
+毎日 08:00 JST に走る。ただしほとんどの PR が出るのは月曜だけで、他の曜日はプリセットの
 `schedule` に弾かれて何もしない。毎日走らせているのは、Dependency Dashboard の
 チェックボックス操作や、閉じた PR の作り直しに週1では反応が遅いため。
+
+曜日を待たずに出るのは、脆弱性のある依存、Action をコミット SHA に固定する PR、
+`tamura09/**` の Action の digest 更新の3つ。どれも「まとめて読む」ことに意味が無い。
 
 `schedule` を時刻で絞っていないのは、**GitHub Actions の `schedule` が遅れる**ため。
 2026-09-07 は 08:00 JST 起動のつもりが 09:48 JST に走り、当時の `before 9am on monday`
@@ -121,8 +133,9 @@ installation access token の寿命は1時間。1回の実行がそれを超え�
 付けると PR を作らず、何をするかだけログに出る。`log_level` を `debug` にすると
 どのリポジトリで何を見たかが全部出る。
 
-`schedule` は「PR を作ってよい期間」なので、手で走らせても月曜でなければ PR は出ない。
-今すぐ作らせたいときは Dependency Dashboard の該当項目にチェックを入れる。
+`schedule` は「PR を作ってよい期間」なので、手で走らせても月曜でなければ PR は出ない
+(上の3つの例外を除く)。今すぐ作らせたいときは Dependency Dashboard の該当項目に
+チェックを入れる。
 
 ## PR は誰の名義で来るか
 
