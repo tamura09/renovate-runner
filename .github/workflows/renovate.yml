@@ -14,8 +14,9 @@
 # Client ID は秘密ではないのでここに直接書く。秘密鍵が無ければ ID だけでは何も
 # できない。
 #
-# 使う action はすべてコミット SHA で固定する。他のリポジトリはタグのままだが、
-# ここは Renovate を有効にした全リポジトリへ書き込める token を扱うので、タグの
+# 使う action はすべてコミット SHA で固定する。共有プリセットの
+# helpers:pinGitHubActionDigests で全リポジトリがそうなるが、ここは特に、
+# Renovate を有効にした全リポジトリへ書き込める token を扱うので、タグの
 # 書き換えがそのままトークンの流出になる。checkout は config.js の中身を、
 # configure-aws-credentials は SSM への到達手段を、create-github-app-token は
 # 秘密鍵そのものを握っている。
@@ -75,8 +76,7 @@ jobs:
 
     steps:
       - name: Checkout
-        # actions/checkout v6.1.0
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Check the repository list
         env:
@@ -94,8 +94,7 @@ jobs:
           echo "対象: ${RENOVATE_REPOSITORIES}"
 
       - name: Configure AWS credentials
-        # aws-actions/configure-aws-credentials v6.2.4
-        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
@@ -137,21 +136,20 @@ jobs:
       #
       # token の寿命は1時間です。1回の実行がそれを超えると途中で失効します。
       #
-      # actions/create-github-app-token v3.2.0
       - name: Mint an installation token
         id: app_token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ env.RENOVATE_APP_CLIENT_ID }}
           private-key: ${{ env.RENOVATE_APP_PRIVATE_KEY }}
           owner: tamura09
 
-      # renovatebot/github-action v46.2.5
-      #
-      # 3つの action の digest は Renovate 自身が追う。共有プリセットが
-      # github-actions の digest 更新をグループに含めている。
+      # 4つの action の digest は Renovate 自身が追う。共有プリセットが
+      # github-actions の digest 更新をグループに含めている。版は `uses:` の行末に
+      # 書く。Renovate はそこからしかタグを読まず、前の行に書くとタグではなく
+      # デフォルトブランチの先頭を追いにいく。
       - name: Renovate
-        uses: renovatebot/github-action@39b914146caeff8cd512e61c8992f1d5913af85c
+        uses: renovatebot/github-action@39b914146caeff8cd512e61c8992f1d5913af85c # v46.2.5
         with:
           configurationFile: config.js
           token: ${{ steps.app_token.outputs.token }}

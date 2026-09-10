@@ -15,6 +15,18 @@
     // コミットメッセージを chore(deps): ... にする。Dependabot でも
     // prefix: chore / include: scope を使っていた。
     ':semanticCommitTypeAll(chore)',
+
+    // Action は必ずコミット SHA で参照する。
+    //
+    // タグは付け替えられる。`@v1` のままにしておくと、実行されるのは「その時点で
+    // 誰かがそのタグを指していた任意のコード」になる。Action は他のジョブと同じ
+    // ランナーの上で、そのワークフローが持つ権限で動くので、タグの書き換えは
+    // そのままトークンの流出になる。
+    //
+    // このプリセットが入ると、Renovate が既存の `@v1` を `@<sha> # v1` に書き換える
+    // PR を出し、以後はタグの移動を digest 更新として追いかける。手で SHA を
+    // 調べ直す作業は残らない。
+    'helpers:pinGitHubActionDigests',
   ],
 
   // 上の :semanticCommitTypeAll(chore) は「semantic commit を使うなら type は chore」
@@ -73,6 +85,54 @@
     {
       matchManagers: ['github-actions'],
       matchUpdateTypes: ['major'],
+      addLabels: ['github-actions'],
+    },
+
+    // 既存の参照を SHA に固定するだけの PR は自動マージする。
+    //
+    // 指し先は今まさに動いているコミットで、実行されるコードは1行も変わらない。
+    // 読むところが無いものを人が開いて回るのは、22 リポジトリ分あると事故の元に
+    // なるだけで、判断の質は上がらない。
+    {
+      matchManagers: ['github-actions'],
+      matchUpdateTypes: ['pin', 'pinDigest'],
+      automerge: true,
+      addLabels: ['github-actions'],
+    },
+
+    // 自分のアカウントの Action と再利用ワークフローだけ、digest の更新も
+    // 自動マージする。
+    //
+    // これが無いと、tamura09/claude-pr-review を1行直すたびに、それを参照する
+    // 20 リポジトリへ SHA を書き換える PR を手で出すことになる。中身は自分で
+    // 書いたもので、変更そのものはあちらの PR で読んでいるので、参照を追随
+    // させる PR に読むところは無い。
+    //
+    // 第三者の Action は含めない。他人が publish したコードを無審査で実行する
+    // ことになり、SHA に固定した意味がそこで消える。第三者の分は上の
+    // github-actions グループにまとまって、週1本の PR として出る。
+    //
+    // schedule を外してあるのは、自分の変更を全リポジトリへ届けるのに月曜まで
+    // 待つ理由が無いため。出るのは自分が Action を直したときだけなので、
+    // 待機期間を置かなくても PR が増え続けることはない。
+    //
+    // 自動マージなので、v1 タグを動かすと参照の切り替えは誰のレビューも通らずに
+    // 全リポジトリへ届く (Renovate bot の PR は claude-pr-review の skip_authors に
+    // 入っているので、Claude のレビューも付かない)。ただしこれは今より緩くならない。
+    // 今は `@v1` のままなので、タグが動いた瞬間に PR も記録も無しで参照先が
+    // 変わっている。固定して digest を追う形にすると、どのコミットに変わったかが
+    // PR とコミット履歴に残るぶん厳しくなる。
+    //
+    // タグを動かせるのはこのアカウントの書き込み権限者だけで、動かす先のコミットは
+    // claude-pr-review 側の PR でレビューを通っている。ここを本当に締めるなら、
+    // 効くのは自動マージを止めることではなく、あちらのタグを保護することになる。
+    {
+      matchManagers: ['github-actions'],
+      matchUpdateTypes: ['digest'],
+      matchDepNames: ['tamura09/**'],
+      groupName: null,
+      schedule: null,
+      automerge: true,
       addLabels: ['github-actions'],
     },
     {
