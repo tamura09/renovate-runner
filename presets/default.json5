@@ -93,9 +93,14 @@
     // 指し先は今まさに動いているコミットで、実行されるコードは1行も変わらない。
     // 読むところが無いものを人が開いて回るのは、22 リポジトリ分あると事故の元に
     // なるだけで、判断の質は上がらない。
+    //
+    // schedule も外す。月曜だけ PR を出すのは更新をまとめて読むためで、読む
+    // ところが無く自動でマージされるものを溜める理由が無い。固定は基本的に
+    // 一度きりで、以後は digest 更新として上のグループに入る。
     {
       matchManagers: ['github-actions'],
       matchUpdateTypes: ['pin', 'pinDigest'],
+      schedule: null,
       automerge: true,
       addLabels: ['github-actions'],
     },
