@@ -14,8 +14,9 @@
 # Client ID は秘密ではないのでここに直接書く。秘密鍵が無ければ ID だけでは何も
 # できない。
 #
-# 使う action はすべてコミット SHA で固定する。他のリポジトリはタグのままだが、
-# ここは Renovate を有効にした全リポジトリへ書き込める token を扱うので、タグの
+# 使う action はすべてコミット SHA で固定する。共有プリセットの
+# helpers:pinGitHubActionDigests で全リポジトリがそうなるが、ここは特に、
+# Renovate を有効にした全リポジトリへ書き込める token を扱うので、タグの
 # 書き換えがそのままトークンの流出になる。checkout は config.js の中身を、
 # configure-aws-credentials は SSM への到達手段を、create-github-app-token は
 # 秘密鍵そのものを握っている。
