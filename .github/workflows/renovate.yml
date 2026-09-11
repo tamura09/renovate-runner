@@ -21,18 +21,32 @@
 # configure-aws-credentials は SSM への到達手段を、create-github-app-token は
 # 秘密鍵そのものを握っている。
 #
-# 毎日走らせているが、PR が出るのは月曜だけ。実際にいつ作るかは共有
-# プリセット (presets/default.json5) の schedule が決める。毎日走らせるのは
+# 毎日2回走らせているが、ほとんどの PR が出るのは月曜だけ。実際にいつ作るかは
+# 共有プリセット (presets/default.json5) の schedule が決める。毎日走らせるのは
 # Dependency Dashboard のチェックボックス操作や、閉じた PR の作り直しに
 # 週1では反応が遅いため。
+#
+# 1日2回にしてあるのは、**自動マージが1回の実行では完結しない**ため。Renovate は
+# PR を作った時点ではチェックが走っていないのでマージできず、マージは次の実行に
+# なる。1日1回だと claude-pr-review の更新が全リポジトリに届くのに2日かかる。
+# 2回にすると、作成と取り込みが同じ日に収まる。
+#
+# GitHub 側の auto-merge (allow_auto_merge) を使えば1回で済むが、それはやらない。
+# Renovate のドキュメントが警告しているとおり、必須ステータスチェックが無いまま
+# platform automerge を使うと、チェックの完了を待たずにマージされうる。この
+# アカウントは大半のリポジトリが必須チェックを設けていない。
 name: Renovate
 
 on:
   schedule:
-    # 08:00 JST。JST の月曜に走るのはこの1回 (日曜 23:00Z) で、プリセットの
-    # schedule ("on monday") はその日1日が窓なので、多少遅れても収まる。
-    # GitHub Actions の schedule は1〜2時間ずれることがある。
+    # 08:00 JST (前日 23:00Z) と 09:00 JST (00:00Z)。JST では同じ日の2回になる。
+    #
+    # 前半で PR を作り、後半でチェックが通ったものを取り込む。プリセットの
+    # schedule ("on monday") は JST の月曜1日が窓なので、どちらも同じ窓に入る。
+    # GitHub Actions の schedule は1〜2時間ずれることがあるが、2時間遅れても
+    # 11:00 JST で、月曜のうちに収まる。
     - cron: "0 23 * * *"
+    - cron: "0 0 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
