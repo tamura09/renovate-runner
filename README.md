@@ -125,7 +125,7 @@ Dependency Dashboard のチェックボックス操作や、閉じた PR の作�
 
 1日2回なのは、**自動マージが1回の実行では完結しない**ため。Renovate は PR を作った
 時点ではチェックが走っていないのでマージできず、マージは次の実行になる。1日1回だと
-claude-pr-review の更新が全リポジトリに届くのに2日かかる。2回にすると、作成と取り込みが
+pr-review の更新が全リポジトリに届くのに2日かかる。2回にすると、作成と取り込みが
 同じ日に収まる。
 
 2回の間を4時間空けてあるのは、`schedule` の遅延が1時間48分だった実績があるため。
@@ -160,7 +160,7 @@ GitHub 側の auto-merge (`allow_auto_merge`) を使えば1回で済むが、そ
 Dependabot の PR と違って、通常の PR と同じように CI が走る。Dependabot の PR では
 secrets も OIDC も渡されず、AWS を触るワークフローが必ず落ちていた。それが無くなる。
 
-Claude のレビューは付かない。`tamura09/claude-pr-review` の既定の `skip_authors` に
+Claude のレビューは付かない。`tamura09/pr-review` の既定の `skip_authors` に
 入れてある。依存の更新 PR は差分が機械的で、上流のリリースノートを読み込ませる意味も
 薄いため。レビューさせたいリポジトリは呼び出し側で `skip_authors` を上書きする。
 
