@@ -1,7 +1,7 @@
 # 人間が作った PR を Claude がレビューする。
 #
 # 実体は再利用可能ワークフローに切り出してある。
-#   https://github.com/tamura09/claude-pr-review
+#   https://github.com/tamura09/pr-review
 #
 # レビューを投稿するだけで、マージも承認もしない。判断するのは人間。
 #
@@ -52,4 +52,4 @@ jobs:
     # 版のコメントは同じ行の末尾に置く。Renovate の github-actions マネージャは
     # そこからしかタグを読まない。前の行に書くと、どのタグの digest なのかを
     # 解決できず、v1 ではなくデフォルトブランチの先頭を追いにいく。
-    uses: tamura09/claude-pr-review/.github/workflows/pr-review.yml@a987d95ec0b6f182b84a2b8ad12f629da6c41845 # v1
+    uses: tamura09/pr-review/.github/workflows/pr-review.yml@a987d95ec0b6f182b84a2b8ad12f629da6c41845 # v1
