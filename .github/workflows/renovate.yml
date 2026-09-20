@@ -59,13 +59,6 @@ on:
         description: "PR を作らず、何をするかだけログに出す"
         type: boolean
         default: false
-      log_level:
-        description: "ログの詳細度"
-        type: choice
-        options:
-          - info
-          - debug
-        default: info
 
 # このワークフロー自体は GitHub に何も書かない。リポジトリを書き換えるのは
 # App の installation token の権限で、GITHUB_TOKEN ではない。
@@ -182,4 +175,4 @@ jobs:
           RENOVATE_BINARY_SOURCE: install
 
           RENOVATE_DRY_RUN: ${{ inputs.dry_run && 'full' || 'null' }}
-          LOG_LEVEL: ${{ inputs.log_level || 'info' }}
+          LOG_LEVEL: info
