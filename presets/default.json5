@@ -10,7 +10,9 @@
     'config:recommended',
 
     // PR の依存更新表に Merge Confidence の全指標を出す。Age / Confidence に加えて
-    // Adoption と Passing も確認できる。
+    // Adoption と Passing も確認できる。セルフホスト版の照会は匿名で、Mend には
+    // ユーザー・リポジトリを識別する情報や依存データを送信しない:
+    // https://docs.renovatebot.com/security-and-permissions/#privacy
     'mergeConfidence:all-badges',
 
     // 更新の一覧と、止まっている更新の理由を Issue 1本にまとめる。
