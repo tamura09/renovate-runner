@@ -111,7 +111,8 @@ jobs:
             exit 1
           fi
 
-          echo "対象: ${RENOVATE_REPOSITORIES}"
+          repository_count="$(tr ',' '\n' <<< "${RENOVATE_REPOSITORIES}" | wc -l | tr -d '[:space:]')"
+          echo "対象リポジトリ数: ${repository_count}"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
