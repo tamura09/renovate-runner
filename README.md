@@ -1,172 +1,40 @@
 # renovate-runner
 
-アカウント全体の依存更新をまとめて回す Renovate の実行役。
+アカウント内の管理対象リポジトリへ依存更新 PR を作る Renovate 実行役。
 
-各リポジトリに Renovate のワークフローは置かない。ここ1本が対象リポジトリを順に
-見て、更新があれば PR を作る。
+このリポジトリは標準 GitHub-hosted runner の実行時間を利用するため public にしている。
+対象リポジトリ、認証情報、更新対象の一覧は公開しない。
 
-## 対象リポジトリの決め方
+## 何をするか
 
-対象は [tamura09/github-terraform](https://github.com/tamura09/github-terraform) が
-決める。`locals.tf` の `enable_renovate` を `true` にして apply すると、このリポジトリの
-Actions 変数 `RENOVATE_REPOSITORIES` にそのリポジトリが載る。**既定は無効**。
+- 定期実行で管理対象リポジトリを確認し、依存更新 PR を作る
+- [config.js](config.js) が全対象へ共通プリセットを適用する
+- 共通の Renovate ルールは [presets/default.json5](presets/default.json5) に置く
+- 各リポジトリの `renovate.json` は任意の個別設定用
+- Renovate の PR 作成者は `tamura09-renovate[bot]`
 
-```hcl
-    <NAME> = {
-      enable_renovate = true
-    }
-```
+対象の追加・削除は、このリポジトリではなく非公開のインフラ設定で管理する。
 
-止めたいときも同じ場所で `false` にする。リポジトリ側のファイルを消す必要はない。
+## セキュリティ
 
-`autodiscover` は使わない。PAT から見えるリポジトリを全部拾ってしまい、どこを回すかが
-GitHub の権限設定側に散らばるため。
+- `main` は保護済み。force push とブランチ削除は禁止
+- 書き込み権限と手動実行権限は所有者のみ
+- 外部 fork の PR workflow は所有者の承認まで実行しない
+- GitHub App の秘密鍵はリポジトリ secret に置かない。AWS OIDC で短期認証し、実行時に外部の秘密ストアから読む
+- Renovate の AWS role はこのリポジトリの `main` からの定期実行・手動実行だけを許可する
+- Actions の利用先は許可リストに限定し、コミット SHA 固定を必須にする
 
-## 設定の置き場所
+## ログ
 
-| ファイル | 何を書くか |
-| --- | --- |
-| [config.js](config.js) | Renovate 自体の設定 (platform、対象の渡し方、gitAuthor)。全リポジトリに継承される |
-| [presets/default.json5](presets/default.json5) | 全リポジトリに当たる共通ルール (スケジュール、グループ分け、ラベル) |
-| 各リポジトリの `renovate.json` | そのリポジトリ固有の設定だけ |
+Actions の履歴とログは public。対象リポジトリ名、認証情報、内部 URL を出力しない。
 
-共通ルールは `config.js` の `extends` から全リポジトリに当たる。各リポジトリの
-`renovate.json` は同じプリセットを extends しているが、二重に読んでも結果は変わらない。
-リポジトリを見ただけで何が当たっているか分かるようにと、固有の設定を足す場所として
-置いてある。**無くても動く**。
+特に `debug` ログは依存更新の調査情報を広く出すため、public な通常実行では使わない。
 
-共通の形は次のとおり。
+## 更新方針
 
-- PR が出るのは月曜だけ (`on monday`、`Asia/Tokyo`)。例外が3つあり、脆弱性のある依存、
-  Action をコミット SHA に固定する PR、`tamura09/**` の Action の digest 更新は
-  曜日を待たずに出る
-- **Action の参照はコミット SHA に固定する** (`helpers:pinGitHubActionDigests`)。
-  タグは付け替えられるので、`@v1` のままだと「その時点で誰かがタグを指していた任意の
-  コード」をワークフローの権限で動かすことになる。Renovate が `@<sha> # v1` に書き換え、
-  以後はタグの移動を digest 更新として追う
-- 固定するだけの PR (`pin` / `pinDigest`) と、`tamura09/**` の Action の digest 更新は
-  自動マージする。前者は実行されるコードが変わらず、後者は変更そのものを元の
-  リポジトリの PR で読んでいる。**第三者の Action の digest は自動マージしない**
-- **npm は公開から1週間経った版だけを上げる** (`minimumReleaseAge: 7 days`)。
-  サプライチェーン攻撃で侵害された版が取り下げられるのはたいてい最初の数日なので、
-  そこに触らない。待っている間は PR も出ない (1つ前の版で PR を作ることもしない)
-- 脆弱性が見つかった依存だけは `schedule` も待機期間も無視して先に上げる
-- 同時に開く PR は5本まで
-- GitHub Actions と Terraform provider は、マイナーとパッチをまとめて1本にする
-- メジャーは個別の PR にする。破壊的変更を1つずつ読むため
-- コミットメッセージは `chore(deps): ...` (`semanticCommits: enabled` で全リポジトリ強制)
-- 更新の一覧と止まっている理由は Dependency Dashboard の Issue にまとまる
+- 通常の更新 PR は月曜日に作る
+- 脆弱性修正、GitHub Actions の SHA 固定、`tamura09/**` の Action digest 更新は曜日を待たない
+- npm パッケージは公開から7日経過後に更新する
+- 第三者 Action の digest 更新は通常更新として月曜に作り、自動マージしない
 
-## 認証
-
-Renovate は GitHub App **tamura09-renovate** として動く (App ID `4847603`、
-Client ID `Iv23liMXUkOapjdcfgG4`)。
-
-秘密鍵を SSM の `/renovate/app-private-key` に1本だけ置き、ワークフローが AWS の OIDC で
-`github-actions-renovate` ロールを引いて読む。読んだ鍵から installation access token を
-作り、Renovate に渡す。GitHub のリポジトリ secret には何も置かない。
-
-Client ID は秘密ではないのでワークフローに直接書いてある。秘密鍵が無ければ ID だけでは
-何もできない。`actions/create-github-app-token` は `app-id` を deprecated にしていて、
-`client-id` を使う。
-
-App に必要な権限は次のとおり。
-
-| 権限 | 用途 |
-| --- | --- |
-| Contents: read/write | ブランチを作って push する |
-| Pull requests: read/write | PR を作る |
-| Workflows: read/write | `.github/workflows` 配下を更新する PR を push する |
-| Issues: read/write | Dependency Dashboard を作る |
-| Commit statuses: read/write | 既にあるブランチの前回の結果を見る。加えて、待機中の npm 更新の残り日数を renovate/stability-days ステータスとして書く |
-| Checks: read | 前回の結果のうち check run の側を見る |
-| Dependabot alerts: read | 脆弱性のある依存を schedule を無視して先に上げる |
-| Metadata: read | 他の権限の前提 |
-
-Commit statuses が読めないと、`renovate/` のブランチが既にあるリポジトリだけが落ちる。
-
-```
-WARN: Integration unauthorized - aborting (repository=tamura09/monspot)
-  GET /repos/tamura09/monspot/commits/<sha>/statuses → 403
-```
-
-書けないと、npm を持つリポジトリだけが落ちる。`minimumReleaseAge` で待たせている更新の
-残り日数を `renovate/stability-days` というステータスに書くため。
-
-```
-INFO: Repository has changed during renovation - aborting (repository=tamura09/monspot)
-  POST /repos/tamura09/monspot/statuses/<sha> → 403
-```
-
-どちらもリポジトリ自体の読み書きはできているので「アクセス権が無い」ようには見えず、
-debug ログを追わないと原因が分からない。
-
-インストール先は Renovate を有効にしたリポジトリすべてと、**このリポジトリ自身**。
-共有プリセットを `github>tamura09/renovate-runner//presets/default.json5` で参照して
-いるので、ここを読めないと全リポジトリで設定の解決に失敗して何も動かない。
-
-```bash
-aws ssm put-parameter --region ap-northeast-1 --name /renovate/app-private-key \
-  --type SecureString --overwrite --value "$(cat <ダウンロードした .pem>)"
-```
-
-`--region` を省くと CLI の既定リージョンに同名のパラメータが新しく作られて成功するので、
-必ず付けること。
-
-installation access token の寿命は1時間。1回の実行がそれを超えると途中で失効する。
-今の規模では届かないが、対象リポジトリが増えて実行が長引くようなら分割する。
-
-## 動かす
-
-毎日 08:00 JST と 12:00 JST の2回走る。ただしほとんどの PR が出るのは月曜だけで、
-他の曜日はプリセットの `schedule` に弾かれて何もしない。毎日走らせているのは、
-Dependency Dashboard のチェックボックス操作や、閉じた PR の作り直しに週1では
-反応が遅いため。
-
-1日2回なのは、**自動マージが1回の実行では完結しない**ため。Renovate は PR を作った
-時点ではチェックが走っていないのでマージできず、マージは次の実行になる。1日1回だと
-pr-review の更新が全リポジトリに届くのに2日かかる。2回にすると、作成と取り込みが
-同じ日に収まる。
-
-2回の間を4時間空けてあるのは、`schedule` の遅延が1時間48分だった実績があるため。
-間隔が遅延より短いと、1本目が発火する前に2本目がトリガーされ、`concurrency` のキューで
-「取り込み→作成」の順に入れ替わり、その日は取り込みが起きない。
-
-GitHub 側の auto-merge (`allow_auto_merge`) を使えば1回で済むが、それはやらない。
-必須ステータスチェックが無いまま platform automerge を使うと、チェックの完了を待たずに
-マージされうる ([renovate#16964](https://github.com/renovatebot/renovate/issues/16964))。
-このアカウントは大半のリポジトリが必須チェックを設けていない。
-
-曜日を待たずに出るのは、脆弱性のある依存、Action をコミット SHA に固定する PR、
-`tamura09/**` の Action の digest 更新の3つ。どれも「まとめて読む」ことに意味が無い。
-
-`schedule` を時刻で絞っていないのは、**GitHub Actions の `schedule` が遅れる**ため。
-2026-09-07 は 08:00 JST 起動のつもりが 09:48 JST に走り、当時の `before 9am on monday`
-を外して PR が1本も出なかった。1〜2時間の遅延は普通に起きるので、曜日だけで判定する。
-
-手で走らせるときは Actions から `Renovate` を `workflow_dispatch` する。`dry_run` を
-付けると PR を作らず、何をするかだけログに出る。`log_level` を `debug` にすると
-どのリポジトリで何を見たかが全部出る。
-
-`schedule` は「PR を作ってよい期間」なので、手で走らせても月曜でなければ PR は出ない
-(上の3つの例外を除く)。今すぐ作らせたいときは Dependency Dashboard の該当項目に
-チェックを入れる。
-
-## PR は誰の名義で来るか
-
-`tamura09-renovate[bot]`。コミットの author も同じ。持ち主が手で作った PR と機械的に
-区別できる。
-
-Dependabot の PR と違って、通常の PR と同じように CI が走る。Dependabot の PR では
-secrets も OIDC も渡されず、AWS を触るワークフローが必ず落ちていた。それが無くなる。
-
-Claude のレビューは付かない。`tamura09/pr-review` の既定の `skip_authors` に
-入れてある。依存の更新 PR は差分が機械的で、上流のリリースノートを読み込ませる意味も
-薄いため。レビューさせたいリポジトリは呼び出し側で `skip_authors` を上書きする。
-
-`monstdb` だけは自前の自動マージ機構 (`renovate-auto-review.yml`) が別に走る。
-
-## Dependabot
-
-使わない。以前 `aws-terraform` / `hetzner-terraform` / `monstdb` に入れていたが、
-Renovate に寄せた。
+詳細なルールは [presets/default.json5](presets/default.json5) を参照。
