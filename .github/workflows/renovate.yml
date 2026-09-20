@@ -1,7 +1,7 @@
 # アカウント全体の依存更新をまとめて回す Renovate。
 #
 # 各リポジトリにワークフローは置かない。ここ1本が RENOVATE_REPOSITORIES に
-# 載っているリポジトリを順に見て、更新があれば PR を作る。
+# 載っているリポジトリを3 shardに分けて並列に見て、更新があれば PR を作る。
 #
 # 対象リポジトリの一覧は tamura09/github-terraform が Actions の変数に書く。
 # locals.tf の enable_renovate が true のリポジトリだけが載る。既定は無効。
@@ -66,7 +66,8 @@ permissions:
   contents: read
   id-token: write
 
-# 同時に2本走らせない。同じリポジトリを2つのプロセスが触ると PR が二重になる。
+# 同時に2本のworkflow runは走らせない。run内のshardはリポジトリ一覧を重複なく分ける
+# ので並列にしてよい。別runが同じリポジトリを触ると PR が二重になる。
 concurrency:
   group: renovate
   cancel-in-progress: false
@@ -80,18 +81,19 @@ env:
   RENOVATE_APP_PRIVATE_KEY_PARAMETER: /renovate/app-private-key
 
 jobs:
-  renovate:
-    name: Renovate
+  prepare:
+    name: Prepare Renovate shards
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.shards.outputs.matrix }}
+      shard_count: ${{ steps.shards.outputs.shard_count }}
     defaults:
       run:
         shell: bash
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Check the repository list
+      - name: Split the repository list
+        id: shards
         env:
           RENOVATE_REPOSITORIES: ${{ vars.RENOVATE_REPOSITORIES }}
         run: |
@@ -104,8 +106,42 @@ jobs:
             exit 1
           fi
 
-          repository_count="$(tr ',' '\n' <<< "${RENOVATE_REPOSITORIES}" | wc -l | tr -d '[:space:]')"
-          echo "対象リポジトリ数: ${repository_count}"
+          mapfile -t repositories < <(tr ',' '\n' <<< "${RENOVATE_REPOSITORIES}" | sed '/^$/d')
+          repository_count="${#repositories[@]}"
+          shard_count=$(( repository_count < 3 ? repository_count : 3 ))
+          echo "対象リポジトリ数: ${repository_count}、shard数: ${shard_count}"
+
+          repositories_json="$(printf '%s\n' "${repositories[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')"
+          matrix="$(jq -cn --argjson repositories "${repositories_json}" --argjson shard_count "${shard_count}" '
+            [range(0; $shard_count) as $shard |
+              {
+                shard: ($shard + 1),
+                repositories: [
+                  $repositories | to_entries[] |
+                  select(.key % $shard_count == $shard) |
+                  .value
+                ] | join(",")
+              }
+            ] | {include: .}
+          ')"
+          echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
+          echo "shard_count=${shard_count}" >> "${GITHUB_OUTPUT}"
+
+  renovate:
+    name: Renovate (${{ matrix.shard }}/${{ needs.prepare.outputs.shard_count }})
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
@@ -168,7 +204,7 @@ jobs:
           configurationFile: config.js
           token: ${{ steps.app_token.outputs.token }}
         env:
-          RENOVATE_REPOSITORIES: ${{ vars.RENOVATE_REPOSITORIES }}
+          RENOVATE_REPOSITORIES: ${{ matrix.repositories }}
 
           # slim イメージなので、terraform や npm は必要になった時点で入れる。
           # これが無いと .terraform.lock.hcl や package-lock.json を更新できない。
