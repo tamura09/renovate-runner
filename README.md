@@ -8,8 +8,9 @@
 ## 何をするか
 
 - 定期実行で管理対象リポジトリを確認し、依存更新 PR を作る
+- [config.js](config.js) が全対象へ共通プリセットを適用する
 - 共通の Renovate ルールは [presets/default.json5](presets/default.json5) に置く
-- 各リポジトリは `renovate.json` から共通プリセットを参照する
+- 各リポジトリの `renovate.json` は任意の個別設定用
 - Renovate の PR 作成者は `tamura09-renovate[bot]`
 
 対象の追加・削除は、このリポジトリではなく非公開のインフラ設定で管理する。
@@ -32,8 +33,8 @@ Actions の履歴とログは public。対象リポジトリ名、認証情報�
 ## 更新方針
 
 - 通常の更新 PR は月曜日に作る
-- 脆弱性修正と GitHub Actions の SHA 固定・digest 更新は優先する
+- 脆弱性修正、GitHub Actions の SHA 固定、`tamura09/**` の Action digest 更新は曜日を待たない
 - npm パッケージは公開から7日経過後に更新する
-- 第三者 Action の digest 更新は自動マージしない
+- 第三者 Action の digest 更新は通常更新として月曜に作り、自動マージしない
 
 詳細なルールは [presets/default.json5](presets/default.json5) を参照。
