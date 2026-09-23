@@ -35,5 +35,6 @@ Actions の履歴とログは public。対象リポジトリ名、認証情報�
 - 脆弱性修正、GitHub Actions の SHA 固定、`tamura09/**` の Action digest 更新は曜日を待たない
 - npm パッケージは公開から7日経過後に更新する
 - 第三者 Action の digest 更新は通常更新として月曜に作り、自動マージしない
+- ベースブランチが進んだ PR は、次の実行で Renovate がベースに追随させる (人がコミットを足した PR は除く)
 
 詳細なルールは [presets/default.json5](presets/default.json5) を参照。

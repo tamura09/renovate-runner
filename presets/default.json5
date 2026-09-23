@@ -60,6 +60,24 @@
 
   labels: ['dependencies'],
 
+  // ベースブランチが進んだら、コンフリクトしていなくても PR を追随させる。
+  //
+  // 既定の rebaseWhen: 'auto' は、次のどれかに当たる PR しか追随させない。
+  //   - automerge: true の PR (SHA 固定と tamura09/** の digest 更新)
+  //   - ベースブランチに「マージ前に最新化を必須にする」保護がある
+  //     (strict な required status checks。ruleset と旧来の branch protection の両方を見る)
+  // どれにも当たらない PR (github-actions / terraform のグループや major) は
+  // 'conflicted' に読み替えられ、コンフリクトするまで古いベースのまま放置される。
+  // リポジトリごとの保護設定によって追随したりしなかったりするのはこのため。
+  //
+  // 古いベースの上で通った CI は、マージ後の状態を確かめたことにならない。
+  // PR は Renovate が作ったブランチなので書き換えても失うものは無い。人が
+  // コミットを足したブランチは、この設定でも Renovate は触らない。
+  //
+  // Renovate が見に行くのは1日2回の実行のときだけなので、追随はベースが
+  // 進んだ直後ではなく次の実行で起きる。
+  rebaseWhen: 'behind-base-branch',
+
   // 脆弱性が見つかった依存だけは schedule も待機期間も無視して先に上げる。
   // 待たせる理由が「様子を見る」ことなので、既に既知の穴が空いている場合には
   // 当てはまらない。
