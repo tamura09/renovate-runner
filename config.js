@@ -6,7 +6,7 @@ module.exports = {
   platform: 'github',
 
   // 対象は Actions の変数 RENOVATE_REPOSITORIES で明示的に渡す
-  // (tamura09/github-terraform が enable_renovate から生成する)。
+  // (tamura09/terraform の github/ root が enable_renovate から生成する)。
   //
   // autodiscover は使わない。PAT から見えるリポジトリを全部拾ってしまい、
   // どこを回すかが GitHub の権限設定側に散らばるため。
