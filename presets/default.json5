@@ -33,7 +33,32 @@
     // PR を出し、以後はタグの移動を digest 更新として追いかける。手で SHA を
     // 調べ直す作業は残らない。
     'helpers:pinGitHubActionDigests',
+
+    // go.mod の `// indirect` の依存は、脆弱性があるときだけ PR を出す。
+    //
+    // Renovate の gomod マネージャは indirect を既定で無効にしていて、Dependency
+    // Dashboard にも載らない。2026-10 に golang.org/x/net の CVE がセキュリティ
+    // スキャンで見つかったとき、x/net が indirect だったリポジトリには PR が
+    // 1本も出なかった。indirect を全部有効にすると、直接使っていない依存の
+    // 更新 PR が毎週並ぶので、脆弱性のときだけに絞る。このプリセットは
+    // indirect の通常の更新を止めたうえで、脆弱性の PR だけ force で通す。
+    'security:gomodIndirectSecurityUpdates',
   ],
+
+  // 脆弱性の情報源に OSV (osv.dev) を足す。
+  //
+  // 下の vulnerabilityAlerts だけだと、情報源は GitHub の Dependabot alerts
+  // (GitHub Advisory Database) しかない。2026-10 の x/net の CVE は Go の
+  // 脆弱性 DB には載っていたが GitHub Advisory Database には無く、アラートが
+  // 0件のまま、PR は schedule どおり月曜を待っていた。セキュリティスキャン
+  // (Trivy) は Go の DB を見ているので先に見つけていた。OSV は Go の DB を
+  // 取り込んでいる。
+  //
+  // Go 本体の脆弱性もこれで拾う。go.mod の `toolchain` 行を OSV の stdlib に
+  // 当てて照合する。`go` 行は言語の版でビルドに使う版ではないので照合しない。
+  // setup-go が `go-version-file: go.mod` で入れる版を `toolchain` 行で決めて
+  // いるのはこのため。
+  osvVulnerabilityAlerts: true,
 
   // 上の :semanticCommitTypeAll(chore) は「semantic commit を使うなら type は chore」
   // という指定でしかない。使うかどうかは既定では自動判定で、リポジトリの既存コミットが
