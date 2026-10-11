@@ -32,7 +32,7 @@ Actions の履歴とログは public。対象リポジトリ名、認証情報�
 ## 更新方針
 
 - 通常の更新 PR は月曜日に作る
-- 脆弱性修正、GitHub Actions の SHA 固定、`tamura09/**` の Action digest 更新は曜日を待たない
+- 脆弱性修正 (GitHub の Dependabot alerts と OSV の両方を見る。go.mod の indirect 依存は脆弱性があるときだけ更新する)、GitHub Actions の SHA 固定、`tamura09/**` の Action digest 更新は曜日を待たない
 - npm パッケージは公開から7日経過後に更新する
 - 第三者 Action の digest 更新は通常更新として月曜に作り、自動マージしない
 - ベースブランチが進んだ PR は、次の実行で Renovate がベースに追随させる (人がコミットを足した PR は除く)
