@@ -79,6 +79,26 @@
   // 週によって出たり出なかったりする。曜日だけで判定する。
   schedule: ['on monday'],
 
+  // どの依存も、公開から2週間経った版だけを対象にする。
+  //
+  // 侵害された版が公開されてから取り下げられるまでは、たいてい最初の数日。
+  // 壊れた版にすぐ修正版が出るのも公開直後に多い。PR の表に出る Merge
+  // Confidence も、公開直後は判断材料が足りず low / neutral になりやすい。
+  // 以前は npm だけ7日にしていたが、グループの中で判定の低い版と高い版が
+  // 混ざって、高い方だけ入れたくなることがあったので、全体で長めに待つ。
+  //
+  // 待っている間は PR も出ない。internalChecksFilter の既定が strict なので、
+  // 期間を満たさない版は候補から外れ、1つ前の版で PR を作ることもしない。
+  // 待っている更新は Dependency Dashboard に載る。
+  //
+  // 公開日時を返さないレジストリ (GHCR や ECR の Docker イメージなど) の更新は、
+  // 既定の minimumReleaseAgeBehaviour: 'timestamp-required' によりずっと出ない。
+  // そういう依存が出てきたら、その依存だけ例外にする。
+  //
+  // 脆弱性修正、SHA 固定、tamura09/** の digest 更新は待たない。それぞれ
+  // vulnerabilityAlerts と packageRules で null に戻している。
+  minimumReleaseAge: '14 days',
+
   // Dependabot の open-pull-requests-limit: 5 と同じ。
   prConcurrentLimit: 5,
   prHourlyLimit: 0,
@@ -112,17 +132,6 @@
   },
 
   packageRules: [
-    // npm はサプライチェーン攻撃の踏み台にされやすい。侵害された版が公開されて
-    // から取り下げられるまでは、たいてい最初の数日。そこに触らないよう、出てから
-    // 1週間経った版だけを対象にする。
-    //
-    // 待っている間は PR も出ない。internalChecksFilter の既定が strict なので、
-    // 期間を満たさない版は候補から外れ、1つ前の版で PR を作ることもしない。
-    {
-      matchManagers: ['npm'],
-      minimumReleaseAge: '7 days',
-    },
-
     // メジャーはグループに入れず個別の PR にする。破壊的変更を1つずつ読むため。
     // マイナーとパッチはまとめて1本にする。
     {
@@ -146,10 +155,15 @@
     // schedule も外す。月曜だけ PR を出すのは更新をまとめて読むためで、読む
     // ところが無く自動でマージされるものを溜める理由が無い。固定は基本的に
     // 一度きりで、以後は digest 更新として上のグループに入る。
+    //
+    // 待機期間も外す。pinDigest はタグが今指している先ではなく、そのタグに合う
+    // 最新版の公開日時で数えるので、2週間より短い間隔でリリースする Action は
+    // いつまでも固定されない。固定しないまま待つほうがタグの書き換えに弱い。
     {
       matchManagers: ['github-actions'],
       matchUpdateTypes: ['pin', 'pinDigest'],
       schedule: null,
+      minimumReleaseAge: null,
       automerge: true,
       addLabels: ['github-actions'],
     },
@@ -168,7 +182,9 @@
     //
     // schedule を外してあるのは、自分の変更を全リポジトリへ届けるのに月曜まで
     // 待つ理由が無いため。出るのは自分が Action を直したときだけなので、
-    // 待機期間を置かなくても PR が増え続けることはない。
+    // 待機期間を置かなくても PR が増え続けることはない。公開からの待機
+    // (minimumReleaseAge) も同じ理由で外す。待つのは他人のリリースの様子を
+    // 見るためで、自分で書いてレビューを通したものには当てはまらない。
     //
     // 自動マージなので、v1 タグを動かすと参照の切り替えは誰のレビューも通らずに
     // 全リポジトリへ届く (Renovate bot の PR は pr-review の skip_authors に
@@ -186,6 +202,7 @@
       matchDepNames: ['tamura09/**'],
       groupName: null,
       schedule: null,
+      minimumReleaseAge: null,
       automerge: true,
       addLabels: ['github-actions'],
     },
