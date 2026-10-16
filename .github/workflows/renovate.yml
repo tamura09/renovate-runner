@@ -146,7 +146,14 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       # App の秘密鍵はリポジトリの secret には置かず、SSM から読みます。
+      #
+      # 鍵は GITHUB_ENV ではなくこのステップの output で渡します。GITHUB_ENV に
+      # 書くと以降の全ステップに見え、RENOVATE_ で始まる名前は
+      # renovatebot/github-action が Renovate のコンテナへそのまま渡します。
+      # コンテナの中では対象リポジトリの内容を処理し、ツールを取ってきて実行するので、
+      # そこに失効しない App の鍵を置かないようにします。
       - name: Read the GitHub App private key from SSM
+        id: app_key
         run: |
           set -euo pipefail
 
@@ -170,10 +177,10 @@ jobs:
           done <<< "${key}"
 
           {
-            echo "RENOVATE_APP_PRIVATE_KEY<<PEM_EOF"
+            echo "private_key<<PEM_EOF"
             echo "${key}"
             echo "PEM_EOF"
-          } >> "${GITHUB_ENV}"
+          } >> "${GITHUB_OUTPUT}"
 
       # 秘密鍵から installation access token を作ります。owner を渡すと、この
       # アカウントに App がインストールされているリポジトリすべてを対象にした
@@ -187,7 +194,7 @@ jobs:
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ env.RENOVATE_APP_CLIENT_ID }}
-          private-key: ${{ env.RENOVATE_APP_PRIVATE_KEY }}
+          private-key: ${{ steps.app_key.outputs.private_key }}
           owner: tamura09
 
       # 4つの action の digest は Renovate 自身が追う。共有プリセットが
