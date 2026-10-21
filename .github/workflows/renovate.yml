@@ -197,6 +197,26 @@ jobs:
           private-key: ${{ steps.app_key.outputs.private_key }}
           owner: tamura09
 
+      # リポジトリごとに、人間の contributor のうちコミット数が最多の1人を選ぶ。
+      # 全ページを取得し、同数なら login の昇順で決める。bot・匿名 contributor は除く。
+      - name: Select the top contributor as reviewer
+        id: reviewer
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          TARGET_REPOSITORY: ${{ matrix.repository }}
+        run: |
+          set -euo pipefail
+
+          reviewer="$(gh api --paginate --slurp \
+            "repos/${TARGET_REPOSITORY}/contributors?per_page=100" \
+            | jq -r '[.[][] | select(.type == "User" and .login != null)]
+              | sort_by(-.contributions, .login) | .[0].login // empty')"
+
+          if [ -z "${reviewer}" ]; then
+            echo "::warning::レビュー依頼できる contributor が見つかりませんでした。"
+          fi
+          echo "login=${reviewer}" >> "${GITHUB_OUTPUT}"
+
       # 4つの action の digest は Renovate 自身が追う。共有プリセットが
       # github-actions の digest 更新をグループに含めている。版は `uses:` の行末に
       # 書く。Renovate はそこからしかタグを読まず、前の行に書くとタグではなく
@@ -208,6 +228,9 @@ jobs:
           token: ${{ steps.app_token.outputs.token }}
         env:
           RENOVATE_REPOSITORIES: ${{ matrix.repository }}
+          RENOVATE_REVIEWERS: ${{ steps.reviewer.outputs.login }}
+          # 自動マージ対象の PR にも、作成時にレビューを依頼する。
+          RENOVATE_ASSIGN_AUTOMERGE: 'true'
 
           # slim イメージなので、terraform や npm は必要になった時点で入れる。
           # これが無いと .terraform.lock.hcl や package-lock.json を更新できない。
