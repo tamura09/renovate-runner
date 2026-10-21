@@ -12,6 +12,8 @@
 - 共通の Renovate ルールは [presets/default.json5](presets/default.json5) に置く
 - 各リポジトリの `renovate.json` は任意の個別設定用
 - Renovate の PR 作成者は `tamura09-renovate[bot]`
+- 新規 PR では、対象リポジトリのコミット数が最多の contributor 1人へレビューを依頼する。bot と匿名 contributor は除外し、同数の場合はユーザー名の昇順で選ぶ
+- 自動マージ対象の PR にもレビューを依頼する。対象者がいない場合は警告を出し、依頼せずに続行する。既存 PR のレビュアーは変更しない
 
 対象の追加・削除は、このリポジトリではなく非公開のインフラ設定で管理する。
 
