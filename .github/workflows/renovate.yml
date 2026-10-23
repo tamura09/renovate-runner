@@ -83,7 +83,7 @@ env:
 jobs:
   prepare:
     name: List Renovate repositories
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04-arm
     outputs:
       repositories: ${{ steps.repositories.outputs.repositories }}
     defaults:
@@ -121,7 +121,7 @@ jobs:
   renovate:
     name: Renovate (${{ matrix.repository }})
     needs: prepare
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04-arm
     strategy:
       fail-fast: false
       # 個人アカウントの Actions は全リポジトリ合わせて同時20ジョブまで。Renovate で
