@@ -42,3 +42,27 @@ Actions の履歴とログは public。対象リポジトリ名、認証情報�
 - ベースブランチが進んだ PR は、次の実行で Renovate がベースに追随させる (人がコミットを足した PR は除く)
 
 詳細なルールは [presets/default.json5](presets/default.json5) を参照。
+
+## Lockfile 更新 PR の変更一覧
+
+Renovate 実行後、同じ App として open な lockfile maintenance PR の本文を補足します。
+パッケージ名、更新前・更新後の版をファイルごとに表示し、追加・削除も記載します。
+複数の版が残る場合は、対応関係を推測せず版の集合で比較します。対応する形式は
+`package-lock.json` / `npm-shrinkwrap.json`、`pnpm-lock.yaml`、`uv.lock`、`flake.lock` です。
+Nix 入力は release version の代わりに revision（無ければ content hash）を表示します。
+
+比較には PR の merge base と head の不変な SHA を使います。対象リポジトリのコードや
+依存インストールは実行しません。本文中の専用マーカーの範囲だけを更新し、Renovate の
+チェックボックスとそれ以外の説明は維持します。再実行・rebase 後も一覧を再生成します。
+同じ版の配布元・ハッシュ・依存関係だけの変更は版の表には含みません。本文の長さ制限に
+達する場合は省略件数と差分へのリンクを表示します。workflow の dry run では本文を更新しません。
+
+既存 PR を手動で更新・確認する場合:
+
+```sh
+python3 -m venv /tmp/lockfile-summary-venv
+/tmp/lockfile-summary-venv/bin/pip install -r requirements.txt
+/tmp/lockfile-summary-venv/bin/python scripts/lockfile_summary.py --repo owner/repo --pr 123 --dry-run
+```
+
+`--dry-run` を外すと本文を更新します。認証には `gh` のログインまたは `GH_TOKEN` を使います。
