@@ -235,10 +235,10 @@ jobs:
                 .user.login == "tamura09-security-scan[bot]"
                 and .pull_request == null
                 and ([.labels[].name] | index("false-positive") == null and index("accepted-risk") == null))
-              then {enabled: true, schedule: ["at any time"], minimumReleaseAge: null,
-                    prConcurrentLimit: 0, automerge: false}
+              then {lockFileMaintenance: {enabled: true, schedule: ["at any time"], minimumReleaseAge: null,
+                    prConcurrentLimit: 0, automerge: false}}
               else {} end')"
-          echo "maintenance=${maintenance}" >> "${GITHUB_OUTPUT}"
+          echo "force=${maintenance}" >> "${GITHUB_OUTPUT}"
 
       # 4つの action の digest は Renovate 自身が追う。共有プリセットが
       # github-actions の digest 更新をグループに含めている。版は `uses:` の行末に
@@ -259,7 +259,8 @@ jobs:
           # これが無いと .terraform.lock.hcl や package-lock.json を更新できない。
           RENOVATE_BINARY_SOURCE: install
 
-          RENOVATE_LOCK_FILE_MAINTENANCE: ${{ steps.security_findings.outputs.maintenance }}
+          # リポジトリ側の extends 解決後にも緊急設定を優先する。
+          RENOVATE_FORCE: ${{ steps.security_findings.outputs.force }}
 
           RENOVATE_DRY_RUN: ${{ inputs.dry_run && 'full' || 'null' }}
           LOG_LEVEL: info
