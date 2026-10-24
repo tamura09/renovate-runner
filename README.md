@@ -55,6 +55,8 @@ Nix 入力は release version の代わりに revision（無ければ content ha
 比較には PR の merge base と head の不変な SHA を使います。対象リポジトリのコードや
 依存インストールは実行しません。本文中の専用マーカーの範囲だけを更新し、Renovate の
 チェックボックスとそれ以外の説明は維持します。再実行・rebase 後も一覧を再生成します。
+表には対象 head と、最新 head が異なる場合は未更新である旨を明記します。Renovate 本体が失敗しても
+認証が利用可能なら一覧の再生成を試みます。キャンセル時には本文を更新しません。
 標準ブランチ `renovate/lock-file-maintenance` の既存一覧を実行前に `prBodyNotes` へ引き継ぎ、
 変更のない実行で Renovate が一覧を削除して再追加することを防ぎます。
 一覧は一時的な設定ファイル経由で渡し、公開ログに展開される step env / output には入れません。

@@ -302,7 +302,7 @@ jobs:
       # PR の merge base と head の lockfile を比較して本文を補足する。
       # 他リポジトリのコードや依存インストールは実行しない。
       - name: Summarize lockfile version changes
-        if: ${{ !inputs.dry_run && steps.summary_dependencies.outcome == 'success' }}
+        if: ${{ !cancelled() && !inputs.dry_run && steps.summary_dependencies.outcome == 'success' && steps.app_token.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           TARGET_REPOSITORY: ${{ matrix.repository }}

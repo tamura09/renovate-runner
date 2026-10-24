@@ -119,6 +119,8 @@ class BodyTests(unittest.TestCase):
     def test_metadata_only_change_is_explained(self):
         body = summary.render("", [("uv.lock", [])], "owner/repo", 1, "a", "b")
         self.assertIn("パッケージの版の変更はありません", body)
+        self.assertIn("最新の PR head と異なる場合は **未更新**", body)
+        self.assertIn("`a` → `b`", body)
 
 
 class GitHubTests(unittest.TestCase):

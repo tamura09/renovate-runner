@@ -103,7 +103,9 @@ def render(body, files, repo, number, base_sha, head_sha):
              f"**ファイル別の合計: 更新 {counts['更新']}件 · 追加 {counts['追加']}件 · 削除 {counts['削除']}件**", "",
              "複数の版があるパッケージは、更新前後の版の集合を表示します。"
              "同じ版の配布元・ハッシュ・依存関係だけの変更は、この表には含みません。", "",
-             f"比較: `{base_sha[:12]}` → `{head_sha[:12]}`（PR の分岐点と head）", ""]
+             f"比較: `{base_sha[:12]}` → `{head_sha[:12]}`（PR の分岐点と head）", "",
+             "この一覧は上記 head 時点の記録です。最新の PR head と異なる場合は **未更新**で、"
+             "現在の変更内容を表しません。再生成を待つか、PR の差分を確認してください。", ""]
     shown = 0
     if any(PurePosixPath(name).name == "flake.lock" for name, _ in files):
         lines.extend(["Nix 入力は revision（無ければ content hash）を表示します。", ""])
