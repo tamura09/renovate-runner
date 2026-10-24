@@ -25,6 +25,7 @@
 - GitHub App の秘密鍵はリポジトリ secret に置かない。AWS OIDC で短期認証し、実行時に外部の秘密ストアから読む
 - Renovate の AWS role はこのリポジトリの `main` からの定期実行・手動実行だけを許可する
 - Actions の利用先は許可リストに限定し、コミット SHA 固定を必須にする
+- App の秘密鍵を取得した直後に AWS 認証情報を消去する。要約用コマンドの開始時に OIDC トークン取得用の環境変数も `unset` し、子プロセスへ渡さない（runner が step env の後に再注入するため、YAML の env 上書きだけには依存しない）
 
 ## ログ
 
@@ -42,3 +43,31 @@ Actions の履歴とログは public。対象リポジトリ名、認証情報�
 - ベースブランチが進んだ PR は、次の実行で Renovate がベースに追随させる (人がコミットを足した PR は除く)
 
 詳細なルールは [presets/default.json5](presets/default.json5) を参照。
+
+## Lockfile 更新 PR の変更一覧
+
+Renovate 実行後、同じ App が作成した、base が `main` の open な lockfile maintenance PR の本文を補足します。
+パッケージ名、更新前・更新後の版をファイルごとに表示し、追加・削除も記載します。
+複数の版が残る場合は、対応関係を推測せず版の集合で比較します。対応する形式は
+`package-lock.json` / `npm-shrinkwrap.json`、`pnpm-lock.yaml`、`uv.lock`、`flake.lock` です。
+Nix 入力は release version の代わりに revision（無ければ content hash）を表示します。
+
+比較には PR の merge base と head の不変な SHA を使います。対象リポジトリのコードや
+依存インストールは実行しません。本文中の専用マーカーの範囲だけを更新し、Renovate の
+チェックボックスとそれ以外の説明は維持します。再実行・rebase 後も一覧を再生成します。
+標準ブランチ `renovate/lock-file-maintenance` の既存一覧を実行前に `prBodyNotes` へ引き継ぎ、
+変更のない実行で Renovate が一覧を削除して再追加することを防ぎます。
+一覧は一時的な設定ファイル経由で渡し、公開ログに展開される step env / output には入れません。
+要約用依存の導入や事前の一覧取得に失敗しても標準設定へ戻し、セキュリティ用の強制更新を含む Renovate 本体は実行します。
+同じ版の配布元・ハッシュ・依存関係だけの変更は版の表には含みません。本文の長さ制限に
+達する場合は省略件数と差分へのリンクを表示します。workflow の dry run では本文を更新しません。
+
+既存 PR を手動で更新・確認する場合:
+
+```sh
+python3 -m venv /tmp/lockfile-summary-venv
+/tmp/lockfile-summary-venv/bin/pip install --require-hashes --only-binary=:all: -r requirements.txt
+/tmp/lockfile-summary-venv/bin/python scripts/lockfile_summary.py --repo owner/repo --pr 123 --dry-run
+```
+
+`--dry-run` を外すと本文を更新します。認証には `gh` のログインまたは `GH_TOKEN` を使います。

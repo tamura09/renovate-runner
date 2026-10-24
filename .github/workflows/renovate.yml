@@ -139,6 +139,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Install verified wheels before fetching credentials or the App token.
+      - name: Install lockfile summary dependencies
+        id: summary_dependencies
+        continue-on-error: true
+        run: |
+          unset ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_ID_TOKEN_REQUEST_TOKEN
+          python3 -m venv "${RUNNER_TEMP}/lockfile-summary-venv"
+          "${RUNNER_TEMP}/lockfile-summary-venv/bin/pip" install --require-hashes --only-binary=:all: -r requirements.txt
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
@@ -181,6 +190,16 @@ jobs:
             echo "${key}"
             echo "PEM_EOF"
           } >> "${GITHUB_OUTPUT}"
+
+      # SSM access is no longer needed. Do not expose the key-reading role to
+      # downstream tooling that parses lockfiles from other repositories.
+      - name: Clear AWS credentials after reading the App key
+        run: |
+          {
+            echo 'AWS_ACCESS_KEY_ID='
+            echo 'AWS_SECRET_ACCESS_KEY='
+            echo 'AWS_SESSION_TOKEN='
+          } >> "${GITHUB_ENV}"
 
       # 秘密鍵から installation access token を作ります。owner を渡すと、この
       # アカウントに App がインストールされているリポジトリすべてを対象にした
@@ -241,6 +260,19 @@ jobs:
               else [] end')"
           echo "package_rules=${rules}" >> "${GITHUB_OUTPUT}"
 
+      # Feed the previous summary into Renovate's native body template so an
+      # unchanged run does not remove it and trigger a second body edit.
+      - name: Preserve lockfile summaries in Renovate notes
+        if: ${{ steps.summary_dependencies.outcome == 'success' }}
+        id: lockfile_notes
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          TARGET_REPOSITORY: ${{ matrix.repository }}
+        run: |
+          unset ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_ID_TOKEN_REQUEST_TOKEN
+          "${RUNNER_TEMP}/lockfile-summary-venv/bin/python" scripts/lockfile_summary.py --prepare-rules
+
       # 4つの action の digest は Renovate 自身が追う。共有プリセットが
       # github-actions の digest 更新をグループに含めている。版は `uses:` の行末に
       # 書く。Renovate はそこからしかタグを読まず、前の行に書くとタグではなく
@@ -248,7 +280,7 @@ jobs:
       - name: Renovate
         uses: renovatebot/github-action@f0f41e5f2e706165f6814b1d0f0d0e319de7d1d9 # v46.3.8
         with:
-          configurationFile: config.js
+          configurationFile: ${{ steps.lockfile_notes.outcome == 'success' && '.renovate-runtime.cjs' || 'config.js' }}
           token: ${{ steps.app_token.outputs.token }}
         env:
           RENOVATE_REPOSITORIES: ${{ matrix.repository }}
@@ -265,3 +297,15 @@ jobs:
 
           RENOVATE_DRY_RUN: ${{ inputs.dry_run && 'full' || 'null' }}
           LOG_LEVEL: info
+
+      # Renovate の lockfile maintenance 本文には更新された版が載らないため、
+      # PR の merge base と head の lockfile を比較して本文を補足する。
+      # 他リポジトリのコードや依存インストールは実行しない。
+      - name: Summarize lockfile version changes
+        if: ${{ !inputs.dry_run && steps.summary_dependencies.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          TARGET_REPOSITORY: ${{ matrix.repository }}
+        run: |
+          unset ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_ID_TOKEN_REQUEST_TOKEN
+          "${RUNNER_TEMP}/lockfile-summary-venv/bin/python" scripts/lockfile_summary.py
