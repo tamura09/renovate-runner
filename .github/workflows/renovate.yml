@@ -217,6 +217,29 @@ jobs:
           fi
           echo "login=${reviewer}" >> "${GITHUB_OUTPUT}"
 
+      # OSV は直接依存だけを検査するため、Trivy が lockfile の間接依存に
+      # 見つけた脆弱性は通常の更新 PR では直らないことがある。スキャナ本人の
+      # 未解決の依存 issue がある場合だけ、週次の lockfile 更新を前倒しする。
+      # API の失敗はエラーにして、検査できなかった状態を「問題なし」にしない。
+      - name: Check dependency security findings
+        id: security_findings
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          TARGET_REPOSITORY: ${{ matrix.repository }}
+        run: |
+          set -euo pipefail
+
+          maintenance="$(gh api --paginate --slurp \
+            "repos/${TARGET_REPOSITORY}/issues?state=open&labels=security-scan,surface%3Adeps&per_page=100" \
+            | jq -c 'if any(.[][];
+                .user.login == "tamura09-security-scan[bot]"
+                and .pull_request == null
+                and ([.labels[].name] | index("false-positive") == null and index("accepted-risk") == null))
+              then {enabled: true, schedule: ["at any time"], minimumReleaseAge: null,
+                    prConcurrentLimit: 0, automerge: false}
+              else {} end')"
+          echo "maintenance=${maintenance}" >> "${GITHUB_OUTPUT}"
+
       # 4つの action の digest は Renovate 自身が追う。共有プリセットが
       # github-actions の digest 更新をグループに含めている。版は `uses:` の行末に
       # 書く。Renovate はそこからしかタグを読まず、前の行に書くとタグではなく
@@ -235,6 +258,8 @@ jobs:
           # slim イメージなので、terraform や npm は必要になった時点で入れる。
           # これが無いと .terraform.lock.hcl や package-lock.json を更新できない。
           RENOVATE_BINARY_SOURCE: install
+
+          RENOVATE_LOCK_FILE_MAINTENANCE: ${{ steps.security_findings.outputs.maintenance }}
 
           RENOVATE_DRY_RUN: ${{ inputs.dry_run && 'full' || 'null' }}
           LOG_LEVEL: info
