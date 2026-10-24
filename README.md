@@ -35,7 +35,9 @@ Actions の履歴とログは public。対象リポジトリ名、認証情報�
 
 - 通常の更新 PR は月曜日に作る
 - 脆弱性修正 (GitHub の Dependabot alerts と OSV の両方を見る。go.mod の indirect 依存は脆弱性があるときだけ更新する)、GitHub Actions の SHA 固定、`tamura09/**` の Action digest 更新は曜日を待たない
-- 公開から14日経過した版だけに更新する (脆弱性修正、GitHub Actions の SHA 固定、`tamura09/**` の Action digest 更新は待たない)
+- npm / pnpm / uv などの lockfile を月曜日に更新し、直接依存の版が変わらない間接依存も追う。lockfile の再解決では、範囲指定の直接依存と間接依存の両方が再解決され、14日の待機期間が適用される保証はない。自動マージはしない
+- security-scan bot が作成した未解決の依存脆弱性 issue があるリポジトリでは、lockfile 更新の曜日・待機期間・同時 PR 数の制限を外す。`false-positive` / `accepted-risk` は対象外。修正版が親依存の制約で選べない場合や、スキャナと Renovate の脆弱性 DB の差は別途確認が必要
+- 通常の依存更新は公開から14日経過した版だけに更新する (脆弱性修正、GitHub Actions の SHA 固定、`tamura09/**` の Action digest 更新は待たない)
 - 第三者 Action の digest 更新は通常更新として月曜に作り、自動マージしない
 - ベースブランチが進んだ PR は、次の実行で Renovate がベースに追随させる (人がコミットを足した PR は除く)
 

@@ -60,6 +60,17 @@
   // いるのはこのため。
   osvVulnerabilityAlerts: true,
 
+  // OSV は直接依存だけを見る。package.json の版が変わらなくても、lockfile に
+  // 固定された間接依存を週次で更新する。既定の before 4am は定期実行と合わない。
+  // lockfile の再解決はパッケージマネージャに委ねるため、間接依存すべてに
+  // minimumReleaseAge が適用される保証はない。範囲指定の直接依存も再解決される
+  // ため、直接・間接の両方で新しい版が入る可能性がある。自動マージはしない。
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: ['on monday'],
+    automerge: false,
+  },
+
   // 上の :semanticCommitTypeAll(chore) は「semantic commit を使うなら type は chore」
   // という指定でしかない。使うかどうかは既定では自動判定で、リポジトリの既存コミットが
   // Conventional Commits で揃っているかを見る。そのため初回の実行では
