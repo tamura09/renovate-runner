@@ -90,7 +90,8 @@ def strip_summary(body):
 
 def render(body, files, repo, number, base_sha, head_sha):
     original = strip_summary(body).lstrip()
-    budget = min(48000, 62000 - len(original.encode("utf-8")))
+    # Leave room below Renovate GitHub smartTruncate's 58,000-character limit.
+    budget = min(48000, 54000 - len(original.encode("utf-8")))
     if budget < 1500:
         raise ValueError("PR body has no room for a lockfile summary")
     counts = {"更新": 0, "追加": 0, "削除": 0}

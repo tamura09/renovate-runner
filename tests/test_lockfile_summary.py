@@ -103,6 +103,15 @@ class BodyTests(unittest.TestCase):
         self.assertIn("Original body", body)
         self.assertEqual(body, summary.render(body, files, "owner/repo", 1, "a", "b"))
 
+    def test_large_existing_body_stays_below_native_renovate_limit(self):
+        original = "x" * 14000
+        files = [("uv.lock", [(f"pkg-{n}", ["1" * 100], ["2" * 100]) for n in range(1000)])]
+        body = summary.render(original, files, "owner/repo", 1, "a", "b")
+        self.assertLess(len(body.encode()), 54000)
+        self.assertIn(original, body)
+        self.assertIn(summary.END, body)
+        self.assertIn("件を省略しました", body)
+
     def test_broken_owned_section_is_not_overwritten(self):
         with self.assertRaises(ValueError):
             summary.strip_summary(summary.START + "manual text")
