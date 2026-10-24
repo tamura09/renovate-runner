@@ -194,9 +194,11 @@ jobs:
       # downstream tooling that parses lockfiles from other repositories.
       - name: Clear AWS credentials after reading the App key
         run: |
-          echo 'AWS_ACCESS_KEY_ID=' >> "${GITHUB_ENV}"
-          echo 'AWS_SECRET_ACCESS_KEY=' >> "${GITHUB_ENV}"
-          echo 'AWS_SESSION_TOKEN=' >> "${GITHUB_ENV}"
+          {
+            echo 'AWS_ACCESS_KEY_ID='
+            echo 'AWS_SECRET_ACCESS_KEY='
+            echo 'AWS_SESSION_TOKEN='
+          } >> "${GITHUB_ENV}"
 
       # 秘密鍵から installation access token を作ります。owner を渡すと、この
       # アカウントに App がインストールされているリポジトリすべてを対象にした
