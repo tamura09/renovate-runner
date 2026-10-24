@@ -143,6 +143,9 @@ jobs:
       - name: Install lockfile summary dependencies
         id: summary_dependencies
         continue-on-error: true
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_URL: ''
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
         run: |
           python3 -m venv "${RUNNER_TEMP}/lockfile-summary-venv"
           "${RUNNER_TEMP}/lockfile-summary-venv/bin/pip" install --require-hashes --only-binary=:all: -r requirements.txt
@@ -266,6 +269,8 @@ jobs:
         id: lockfile_notes
         continue-on-error: true
         env:
+          ACTIONS_ID_TOKEN_REQUEST_URL: ''
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           TARGET_REPOSITORY: ${{ matrix.repository }}
         run: '"${RUNNER_TEMP}/lockfile-summary-venv/bin/python" scripts/lockfile_summary.py --prepare-rules'
@@ -301,6 +306,8 @@ jobs:
       - name: Summarize lockfile version changes
         if: ${{ !inputs.dry_run && steps.summary_dependencies.outcome == 'success' }}
         env:
+          ACTIONS_ID_TOKEN_REQUEST_URL: ''
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           TARGET_REPOSITORY: ${{ matrix.repository }}
         run: |
