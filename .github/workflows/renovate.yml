@@ -141,6 +141,8 @@ jobs:
 
       # Install verified wheels before fetching credentials or the App token.
       - name: Install lockfile summary dependencies
+        id: summary_dependencies
+        continue-on-error: true
         run: |
           python3 -m venv "${RUNNER_TEMP}/lockfile-summary-venv"
           "${RUNNER_TEMP}/lockfile-summary-venv/bin/pip" install --require-hashes --only-binary=:all: -r requirements.txt
@@ -250,6 +252,7 @@ jobs:
       # Feed the previous summary into Renovate's native body template so an
       # unchanged run does not remove it and trigger a second body edit.
       - name: Preserve lockfile summaries in Renovate notes
+        if: ${{ steps.summary_dependencies.outcome == 'success' }}
         id: lockfile_notes
         continue-on-error: true
         env:
@@ -286,7 +289,7 @@ jobs:
       # PR の merge base と head の lockfile を比較して本文を補足する。
       # 他リポジトリのコードや依存インストールは実行しない。
       - name: Summarize lockfile version changes
-        if: ${{ !inputs.dry_run }}
+        if: ${{ !inputs.dry_run && steps.summary_dependencies.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           TARGET_REPOSITORY: ${{ matrix.repository }}

@@ -99,7 +99,9 @@ class BodyTests(unittest.TestCase):
         body = summary.render("Original body", files, "owner/repo", 1, "a", "b")
         self.assertLess(len(body.encode()), 62000)
         self.assertIn("件を省略しました", body)
+        self.assertIn("https://redirect.github.com/owner/repo/pull/1/files", body)
         self.assertIn("Original body", body)
+        self.assertEqual(body, summary.render(body, files, "owner/repo", 1, "a", "b"))
 
     def test_broken_owned_section_is_not_overwritten(self):
         with self.assertRaises(ValueError):

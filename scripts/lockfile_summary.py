@@ -124,7 +124,7 @@ def render(body, files, repo, number, base_sha, head_sha):
             break
     if shown < total:
         lines.extend([f"本文の長さ制限により {total - shown}件を省略しました。"
-                      f"[PR の差分](https://github.com/{repo}/pull/{number}/files)で確認してください。", ""])
+                      f"[PR の差分](https://redirect.github.com/{repo}/pull/{number}/files)で確認してください。", ""])
     lines.append(END)
     section = "\n".join(lines)
     if START in body:
