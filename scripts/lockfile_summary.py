@@ -207,7 +207,7 @@ def update(repo, number, dry_run=False):
 
 def prepare_rules(repo, prs):
     """Keep the existing canonical PR summary in Renovate's native notes."""
-    rules = json.loads(os.environ.get("EXISTING_PACKAGE_RULES", "[]"))
+    rules = []
     candidates = [pr for pr in prs if pr["head"]["ref"] == "renovate/lock-file-maintenance"]
     if len(candidates) == 1:
         body = candidates[0].get("body") or ""
@@ -217,9 +217,14 @@ def prepare_rules(repo, prs):
             # Notes are Handlebars templates. Never interpret lockfile data as a template.
             note = match.group().replace("{", "&#123;").replace("}", "&#125;")
             rules.append({"matchUpdateTypes": ["lockFileMaintenance"], "prBodyNotes": [note]})
-    # A single-line JSON output keeps private contents out of public workflow logs.
-    with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-        output.write("package_rules=" + json.dumps(rules, ensure_ascii=True) + "\n")
+    # The action mounts only its configuration file into the Renovate container.
+    # Put notes in that file, never in step env or outputs (which Actions logs).
+    from pathlib import Path
+    source = Path(__file__).resolve().parents[1] / "config.js"
+    destination = Path(os.environ.get("LOCKFILE_CONFIG_PATH", ".renovate-runtime.cjs"))
+    destination.write_text(source.read_text(encoding="utf-8") +
+        "\nmodule.exports.packageRules = [...(module.exports.packageRules ?? []), ..." +
+        json.dumps(rules, ensure_ascii=True) + "];\n", encoding="utf-8")
 
 
 def main():

@@ -251,10 +251,10 @@ jobs:
       # unchanged run does not remove it and trigger a second body edit.
       - name: Preserve lockfile summaries in Renovate notes
         id: lockfile_notes
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           TARGET_REPOSITORY: ${{ matrix.repository }}
-          EXISTING_PACKAGE_RULES: ${{ steps.security_findings.outputs.package_rules }}
         run: '"${RUNNER_TEMP}/lockfile-summary-venv/bin/python" scripts/lockfile_summary.py --prepare-rules'
 
       # 4つの action の digest は Renovate 自身が追う。共有プリセットが
@@ -264,7 +264,7 @@ jobs:
       - name: Renovate
         uses: renovatebot/github-action@f0f41e5f2e706165f6814b1d0f0d0e319de7d1d9 # v46.3.8
         with:
-          configurationFile: config.js
+          configurationFile: ${{ steps.lockfile_notes.outcome == 'success' && '.renovate-runtime.cjs' || 'config.js' }}
           token: ${{ steps.app_token.outputs.token }}
         env:
           RENOVATE_REPOSITORIES: ${{ matrix.repository }}
@@ -277,7 +277,7 @@ jobs:
           RENOVATE_BINARY_SOURCE: install
 
           # lockfile 更新だけを強制し、既定のブランチ名や repo 固有の設定は維持する。
-          RENOVATE_PACKAGE_RULES: ${{ steps.lockfile_notes.outputs.package_rules }}
+          RENOVATE_PACKAGE_RULES: ${{ steps.security_findings.outputs.package_rules }}
 
           RENOVATE_DRY_RUN: ${{ inputs.dry_run && 'full' || 'null' }}
           LOG_LEVEL: info

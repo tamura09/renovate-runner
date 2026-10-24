@@ -172,23 +172,31 @@ class GitHubTests(unittest.TestCase):
             summary.update("owner/repo", 1)
         self.assertEqual(api.call_count, 3)
 
-    def test_native_rules_preserve_security_rules_and_escape_templates(self):
+    def prepared_config(self, prs):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "runtime.cjs"
+            with patch.dict(os.environ, {"LOCKFILE_CONFIG_PATH": str(output)}):
+                summary.prepare_rules("owner/repo", prs)
+            # Load exactly the generated CommonJS file used by the Docker action.
+            result = summary.subprocess.run(["node", "-e",
+                "console.log(JSON.stringify(require(process.argv[1])))", str(output)],
+                capture_output=True, text=True, check=True)
+            return json.loads(result.stdout)
+
+    def test_native_rules_are_file_only_and_escape_templates(self):
         pr = self.pr()
         pr["body"] = summary.START + "{{secret}}" + summary.END
-        security = [{"matchUpdateTypes": ["lockFileMaintenance"], "force": {"enabled": True}}]
-        with tempfile.NamedTemporaryFile(mode="r+") as output, patch.dict(os.environ, {
-                "GITHUB_OUTPUT": output.name, "EXISTING_PACKAGE_RULES": json.dumps(security)}):
-            summary.prepare_rules("owner/repo", [pr])
-            rules = json.loads(output.read().removeprefix("package_rules="))
-        self.assertEqual(rules[0], security[0])
-        self.assertNotIn("{{", rules[1]["prBodyNotes"][0])
-        self.assertEqual(rules[1]["matchUpdateTypes"], ["lockFileMaintenance"])
+        output = io.StringIO()
+        with patch("sys.stdout", output):
+            config = self.prepared_config([pr])
+        self.assertEqual(output.getvalue(), "")
+        self.assertEqual(config["platform"], "github")
+        self.assertEqual(config["extends"], ["github>tamura09/renovate-runner//presets/default.json5"])
+        self.assertNotIn("{{", config["packageRules"][0]["prBodyNotes"][0])
+        self.assertEqual(config["packageRules"][0]["matchUpdateTypes"], ["lockFileMaintenance"])
 
-    def test_native_rules_without_owned_summary_leave_rules_unchanged(self):
-        with tempfile.NamedTemporaryFile(mode="r+") as output, patch.dict(os.environ, {
-                "GITHUB_OUTPUT": output.name, "EXISTING_PACKAGE_RULES": "[]"}):
-            summary.prepare_rules("owner/repo", [self.pr()])
-            self.assertEqual(json.loads(output.read().removeprefix("package_rules=")), [])
+    def test_native_rules_without_owned_summary_leave_rules_empty(self):
+        self.assertEqual(self.prepared_config([self.pr()])["packageRules"], [])
 
     def test_errors_do_not_disclose_private_diagnostics(self):
         output = io.StringIO()
