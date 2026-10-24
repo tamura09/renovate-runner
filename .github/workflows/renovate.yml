@@ -190,6 +190,14 @@ jobs:
             echo "PEM_EOF"
           } >> "${GITHUB_OUTPUT}"
 
+      # SSM access is no longer needed. Do not expose the key-reading role to
+      # downstream tooling that parses lockfiles from other repositories.
+      - name: Clear AWS credentials after reading the App key
+        run: |
+          echo 'AWS_ACCESS_KEY_ID=' >> "${GITHUB_ENV}"
+          echo 'AWS_SECRET_ACCESS_KEY=' >> "${GITHUB_ENV}"
+          echo 'AWS_SESSION_TOKEN=' >> "${GITHUB_ENV}"
+
       # 秘密鍵から installation access token を作ります。owner を渡すと、この
       # アカウントに App がインストールされているリポジトリすべてを対象にした
       # token になります。渡さないと実行中のリポジトリだけになり、他のリポジトリを
