@@ -139,6 +139,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Install verified wheels before fetching credentials or the App token.
+      - name: Install lockfile summary dependencies
+        run: |
+          python3 -m venv "${RUNNER_TEMP}/lockfile-summary-venv"
+          "${RUNNER_TEMP}/lockfile-summary-venv/bin/pip" install --require-hashes --only-binary=:all: -r requirements.txt
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
@@ -241,6 +247,16 @@ jobs:
               else [] end')"
           echo "package_rules=${rules}" >> "${GITHUB_OUTPUT}"
 
+      # Feed the previous summary into Renovate's native body template so an
+      # unchanged run does not remove it and trigger a second body edit.
+      - name: Preserve lockfile summaries in Renovate notes
+        id: lockfile_notes
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          TARGET_REPOSITORY: ${{ matrix.repository }}
+          EXISTING_PACKAGE_RULES: ${{ steps.security_findings.outputs.package_rules }}
+        run: '"${RUNNER_TEMP}/lockfile-summary-venv/bin/python" scripts/lockfile_summary.py --prepare-rules'
+
       # 4つの action の digest は Renovate 自身が追う。共有プリセットが
       # github-actions の digest 更新をグループに含めている。版は `uses:` の行末に
       # 書く。Renovate はそこからしかタグを読まず、前の行に書くとタグではなく
@@ -261,7 +277,7 @@ jobs:
           RENOVATE_BINARY_SOURCE: install
 
           # lockfile 更新だけを強制し、既定のブランチ名や repo 固有の設定は維持する。
-          RENOVATE_PACKAGE_RULES: ${{ steps.security_findings.outputs.package_rules }}
+          RENOVATE_PACKAGE_RULES: ${{ steps.lockfile_notes.outputs.package_rules }}
 
           RENOVATE_DRY_RUN: ${{ inputs.dry_run && 'full' || 'null' }}
           LOG_LEVEL: info
@@ -275,6 +291,4 @@ jobs:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           TARGET_REPOSITORY: ${{ matrix.repository }}
         run: |
-          python3 -m venv "${RUNNER_TEMP}/lockfile-summary-venv"
-          "${RUNNER_TEMP}/lockfile-summary-venv/bin/pip" install -r requirements.txt
           "${RUNNER_TEMP}/lockfile-summary-venv/bin/python" scripts/lockfile_summary.py

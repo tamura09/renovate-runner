@@ -8,6 +8,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tomllib
 from collections import defaultdict
 from pathlib import PurePosixPath
@@ -41,17 +42,20 @@ def versions(filename, content):
                     walk(package.get("dependencies", {}))
             walk(data.get("dependencies", {}))
     elif kind == "pnpm-lock.yaml":
-        data = yaml.safe_load(content)
-        for key, package in data.get("packages", {}).items():
-            key = key.lstrip("/").split("(", 1)[0]
-            match = re.fullmatch(r"((?:@[^/]+/)?[^/@]+)@(.+)", key)
-            if match:
-                name, version = match.groups()
-            else:
-                name, separator, version = key.rpartition("/")
-                if not separator:
-                    raise ValueError(f"Unsupported pnpm package key: {key}")
-            add(name, (package or {}).get("version") or version.split("_", 1)[0])
+        # pnpm 12 can retain multiple YAML documents in one lockfile.
+        for data in yaml.safe_load_all(content):
+            if data is None:
+                continue
+            for key, package in data.get("packages", {}).items():
+                key = key.lstrip("/").split("(", 1)[0]
+                match = re.fullmatch(r"((?:@[^/]+/)?[^/@]+)@(.+)", key)
+                if match:
+                    name, version = match.groups()
+                else:
+                    name, separator, version = key.rpartition("/")
+                    if not separator:
+                        raise ValueError("Unsupported pnpm package key")
+                add(name, (package or {}).get("version") or version.split("_", 1)[0])
     elif kind == "uv.lock":
         for package in tomllib.loads(content).get("package", []):
             add(package.get("name"), package.get("version"))
@@ -73,7 +77,7 @@ def changes(before, after):
 
 def code(value):
     escaped = html.escape(" ".join(value.split()))
-    for character in "|`*_[]\\":
+    for character in "|`*_[]{}\\":
         escaped = escaped.replace(character, f"&#{ord(character)};")
     return "<code>" + escaped + "</code>"
 
@@ -95,11 +99,13 @@ def render(body, files, repo, number, base_sha, head_sha):
             counts["更新" if old and new else "追加" if new else "削除"] += 1
     total = sum(counts.values())
     lines = [START, "### Lockfile のバージョン変更", "",
-             f"**更新 {counts['更新']}件 · 追加 {counts['追加']}件 · 削除 {counts['削除']}件**", "",
+             f"**ファイル別の合計: 更新 {counts['更新']}件 · 追加 {counts['追加']}件 · 削除 {counts['削除']}件**", "",
              "複数の版があるパッケージは、更新前後の版の集合を表示します。"
              "同じ版の配布元・ハッシュ・依存関係だけの変更は、この表には含みません。", "",
              f"比較: `{base_sha[:12]}` → `{head_sha[:12]}`（PR の分岐点と head）", ""]
     shown = 0
+    if any(PurePosixPath(name).name == "flake.lock" for name, _ in files):
+        lines.extend(["Nix 入力は revision（無ければ content hash）を表示します。", ""])
     for filename, rows in files:
         heading = [f"#### {code(filename)}", "", "| パッケージ / Nix 入力 | 更新前 | 更新後 |", "|---|---|---|"]
         if not rows:
@@ -120,7 +126,11 @@ def render(body, files, repo, number, base_sha, head_sha):
         lines.extend([f"本文の長さ制限により {total - shown}件を省略しました。"
                       f"[PR の差分](https://github.com/{repo}/pull/{number}/files)で確認してください。", ""])
     lines.append(END)
-    return "\n".join(lines) + "\n\n" + original
+    section = "\n".join(lines)
+    if START in body:
+        return re.sub(re.escape(START) + r".*?" + re.escape(END),
+                      lambda _: section, body, flags=re.S)
+    return section + "\n\n" + original
 
 
 def api(endpoint, payload=None, paginate=False):
@@ -179,7 +189,8 @@ def update(repo, number, dry_run=False):
         after = versions(name, read_file(repo, name, head)) if new_supported and file["status"] != "removed" else {}
         summaries.append((name, changes(before, after)))
     if not summaries:
-        raise ValueError("No supported lockfiles in maintenance PR")
+        print("Unsupported lockfile format; summary skipped.")
+        return
     # Recheck the head and preserve body edits made while files were fetched.
     current = api(endpoint)
     if current["state"] != "open" or current["head"]["sha"] != head:
@@ -189,9 +200,26 @@ def update(repo, number, dry_run=False):
         print(body)
     elif body != (current.get("body") or ""):
         api(endpoint, {"body": body})
-        print(f"{repo} #{number}: lockfile summary updated")
+        print("Lockfile summary updated.")
     else:
-        print(f"{repo} #{number}: lockfile summary unchanged")
+        print("Lockfile summary unchanged.")
+
+
+def prepare_rules(repo, prs):
+    """Keep the existing canonical PR summary in Renovate's native notes."""
+    rules = json.loads(os.environ.get("EXISTING_PACKAGE_RULES", "[]"))
+    candidates = [pr for pr in prs if pr["head"]["ref"] == "renovate/lock-file-maintenance"]
+    if len(candidates) == 1:
+        body = candidates[0].get("body") or ""
+        strip_summary(body)  # Validate marker ownership before reuse.
+        match = re.search(re.escape(START) + r".*?" + re.escape(END), body, flags=re.S)
+        if match:
+            # Notes are Handlebars templates. Never interpret lockfile data as a template.
+            note = match.group().replace("{", "&#123;").replace("}", "&#125;")
+            rules.append({"matchUpdateTypes": ["lockFileMaintenance"], "prBodyNotes": [note]})
+    # A single-line JSON output keeps private contents out of public workflow logs.
+    with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+        output.write("package_rules=" + json.dumps(rules, ensure_ascii=True) + "\n")
 
 
 def main():
@@ -199,15 +227,39 @@ def main():
     parser.add_argument("--repo", default=os.environ.get("TARGET_REPOSITORY"))
     parser.add_argument("--pr", type=int)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--prepare-rules", action="store_true")
     args = parser.parse_args()
     if not args.repo or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repo):
         parser.error("--repo must be owner/name")
-    numbers = [args.pr] if args.pr else [pr["number"]
-        for page in api(f"repos/{args.repo}/pulls?state=open&per_page=100", paginate=True)
-        for pr in page if eligible(pr, args.repo)]
+    prs = [pr for page in api(f"repos/{args.repo}/pulls?state=open&per_page=100", paginate=True)
+           for pr in page if eligible(pr, args.repo)] if not args.pr else []
+    if args.prepare_rules:
+        if args.pr:
+            parser.error("--prepare-rules scans open maintenance PRs without --pr")
+        prepare_rules(args.repo, prs)
+        return
+    numbers = [args.pr] if args.pr else [pr["number"] for pr in prs]
+    failed = False
     for number in numbers:
-        update(args.repo, number, args.dry_run)
+        try:
+            update(args.repo, number, args.dry_run)
+        except Exception:
+            failed = True
+            print("::error::One lockfile summary failed; continuing with other PRs.", file=sys.stderr)
+    if failed:
+        raise RuntimeError("Some lockfile summaries failed")
+
+
+def run():
+    try:
+        main()
+    except Exception as error:
+        # API exceptions and parser tracebacks can contain private names or file contents.
+        print(f"::error::Lockfile summary failed ({type(error).__name__}). "
+              "Check the target PR and lockfile format.", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(run())

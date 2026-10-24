@@ -1,4 +1,7 @@
 import json
+import io
+import os
+import tempfile
 import sys
 import unittest
 from pathlib import Path
@@ -40,6 +43,11 @@ snapshots:
         data = "packages:\n  /@scope/pkg/1.2.3_peer@2: {}\n  /other@2.0.0: {}\n"
         self.assertEqual(summary.versions("pnpm-lock.yaml", data), {"@scope/pkg": {"1.2.3"}, "other": {"2.0.0"}})
 
+    def test_pnpm_multiple_documents_and_empty_document(self):
+        data = "packages:\n  foo@1.0.0: {}\n---\npackages:\n  foo@2.0.0: {}\n  bar@1.0.0: {}\n---\n"
+        self.assertEqual(summary.versions("pnpm-lock.yaml", data), {
+            "foo": {"1.0.0", "2.0.0"}, "bar": {"1.0.0"}})
+
     def test_uv_versions_are_sets(self):
         data = '[[package]]\nname="a"\nversion="1.0"\n[[package]]\nname="a"\nversion="2.0"\n'
         self.assertEqual(summary.versions("uv.lock", data), {"a": {"1.0", "2.0"}})
@@ -78,6 +86,13 @@ class BodyTests(unittest.TestCase):
         self.assertNotIn("`", value)
         self.assertNotIn("[", value)
         self.assertNotIn("\n", value)
+
+    def test_replaces_native_note_in_place(self):
+        body = "Renovate intro\n\n" + summary.START + "old" + summary.END + "\n\nRebase checkbox"
+        updated = summary.render(body, [("uv.lock", [])], "owner/repo", 1, "a", "b")
+        self.assertTrue(updated.startswith("Renovate intro\n\n"))
+        self.assertTrue(updated.endswith("\n\nRebase checkbox"))
+        self.assertEqual(updated, summary.render(updated, [("uv.lock", [])], "owner/repo", 1, "a", "b"))
 
     def test_body_limit_is_explicit(self):
         files = [("uv.lock", [(f"pkg-{n}", ["1" * 100], ["2" * 100]) for n in range(1000)])]
@@ -149,6 +164,40 @@ class GitHubTests(unittest.TestCase):
         _, read = self.run_update(status="removed")
         self.assertEqual(read.call_count, 1)
         self.assertEqual(read.call_args.args[2], "merge-base")
+
+    def test_unsupported_format_skips_without_writing_or_raising(self):
+        responses = [self.pr(), {"merge_base_commit": {"sha": "base"}},
+                     [[{"filename": ".terraform.lock.hcl", "status": "modified"}]]]
+        with patch.object(summary, "api", side_effect=responses) as api, patch("builtins.print"):
+            summary.update("owner/repo", 1)
+        self.assertEqual(api.call_count, 3)
+
+    def test_native_rules_preserve_security_rules_and_escape_templates(self):
+        pr = self.pr()
+        pr["body"] = summary.START + "{{secret}}" + summary.END
+        security = [{"matchUpdateTypes": ["lockFileMaintenance"], "force": {"enabled": True}}]
+        with tempfile.NamedTemporaryFile(mode="r+") as output, patch.dict(os.environ, {
+                "GITHUB_OUTPUT": output.name, "EXISTING_PACKAGE_RULES": json.dumps(security)}):
+            summary.prepare_rules("owner/repo", [pr])
+            rules = json.loads(output.read().removeprefix("package_rules="))
+        self.assertEqual(rules[0], security[0])
+        self.assertNotIn("{{", rules[1]["prBodyNotes"][0])
+        self.assertEqual(rules[1]["matchUpdateTypes"], ["lockFileMaintenance"])
+
+    def test_native_rules_without_owned_summary_leave_rules_unchanged(self):
+        with tempfile.NamedTemporaryFile(mode="r+") as output, patch.dict(os.environ, {
+                "GITHUB_OUTPUT": output.name, "EXISTING_PACKAGE_RULES": "[]"}):
+            summary.prepare_rules("owner/repo", [self.pr()])
+            self.assertEqual(json.loads(output.read().removeprefix("package_rules=")), [])
+
+    def test_errors_do_not_disclose_private_diagnostics(self):
+        output = io.StringIO()
+        with patch.object(summary, "main", side_effect=ValueError("private-repo secret file content")), \
+             patch("sys.stderr", output):
+            self.assertEqual(summary.run(), 1)
+        self.assertIn("ValueError", output.getvalue())
+        self.assertNotIn("private-repo", output.getvalue())
+        self.assertNotIn("secret", output.getvalue())
 
 
 if __name__ == "__main__":

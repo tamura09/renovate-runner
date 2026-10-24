@@ -45,7 +45,7 @@ Actions の履歴とログは public。対象リポジトリ名、認証情報�
 
 ## Lockfile 更新 PR の変更一覧
 
-Renovate 実行後、同じ App として open な lockfile maintenance PR の本文を補足します。
+Renovate 実行後、同じ App が作成した、base が `main` の open な lockfile maintenance PR の本文を補足します。
 パッケージ名、更新前・更新後の版をファイルごとに表示し、追加・削除も記載します。
 複数の版が残る場合は、対応関係を推測せず版の集合で比較します。対応する形式は
 `package-lock.json` / `npm-shrinkwrap.json`、`pnpm-lock.yaml`、`uv.lock`、`flake.lock` です。
@@ -54,6 +54,8 @@ Nix 入力は release version の代わりに revision（無ければ content ha
 比較には PR の merge base と head の不変な SHA を使います。対象リポジトリのコードや
 依存インストールは実行しません。本文中の専用マーカーの範囲だけを更新し、Renovate の
 チェックボックスとそれ以外の説明は維持します。再実行・rebase 後も一覧を再生成します。
+標準ブランチ `renovate/lock-file-maintenance` の既存一覧を実行前に `prBodyNotes` へ引き継ぎ、
+変更のない実行で Renovate が一覧を削除して再追加することを防ぎます。
 同じ版の配布元・ハッシュ・依存関係だけの変更は版の表には含みません。本文の長さ制限に
 達する場合は省略件数と差分へのリンクを表示します。workflow の dry run では本文を更新しません。
 
@@ -61,7 +63,7 @@ Nix 入力は release version の代わりに revision（無ければ content ha
 
 ```sh
 python3 -m venv /tmp/lockfile-summary-venv
-/tmp/lockfile-summary-venv/bin/pip install -r requirements.txt
+/tmp/lockfile-summary-venv/bin/pip install --require-hashes --only-binary=:all: -r requirements.txt
 /tmp/lockfile-summary-venv/bin/python scripts/lockfile_summary.py --repo owner/repo --pr 123 --dry-run
 ```
 

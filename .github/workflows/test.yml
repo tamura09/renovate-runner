@@ -16,5 +16,5 @@ jobs:
       - name: Test lockfile summaries
         run: |
           python3 -m venv "${RUNNER_TEMP}/lockfile-summary-venv"
-          "${RUNNER_TEMP}/lockfile-summary-venv/bin/pip" install -r requirements.txt
+          "${RUNNER_TEMP}/lockfile-summary-venv/bin/pip" install --require-hashes --only-binary=:all: -r requirements.txt
           "${RUNNER_TEMP}/lockfile-summary-venv/bin/python" -m unittest discover -s tests -v
