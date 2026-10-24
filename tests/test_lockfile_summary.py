@@ -185,6 +185,15 @@ class GitHubTests(unittest.TestCase):
             summary.update("owner/repo", 1)
         self.assertEqual(api.call_count, 3)
 
+    def test_removes_old_summary_when_supported_diff_disappears(self):
+        pr = self.pr()
+        pr["body"] = summary.START + "outdated versions" + summary.END + "\n\nManual notes"
+        responses = [pr, {"merge_base_commit": {"sha": "base"}},
+                     [[{"filename": ".terraform.lock.hcl", "status": "modified"}]], pr, {}]
+        with patch.object(summary, "api", side_effect=responses) as api, patch("builtins.print"):
+            summary.update("owner/repo", 1)
+        self.assertEqual(api.call_args.args[1], {"body": "Manual notes"})
+
     def prepared_config(self, prs):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "runtime.cjs"

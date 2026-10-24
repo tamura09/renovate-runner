@@ -191,14 +191,16 @@ def update(repo, number, dry_run=False):
         before = versions(old_name, read_file(repo, old_name, base)) if old_supported and file["status"] != "added" else {}
         after = versions(name, read_file(repo, name, head)) if new_supported and file["status"] != "removed" else {}
         summaries.append((name, changes(before, after)))
-    if not summaries:
+    if not summaries and START not in (pr.get("body") or "") and END not in (pr.get("body") or ""):
         print("Unsupported lockfile format; summary skipped.")
         return
     # Recheck the head and preserve body edits made while files were fetched.
     current = api(endpoint)
     if current["state"] != "open" or current["head"]["sha"] != head:
         raise ValueError("PR changed while generating its lockfile summary; retry next run")
-    body = render(current.get("body") or "", summaries, repo, number, base, head)
+    current_body = current.get("body") or ""
+    body = (render(current_body, summaries, repo, number, base, head)
+            if summaries else strip_summary(current_body))
     if dry_run:
         print(body)
     elif body != (current.get("body") or ""):
