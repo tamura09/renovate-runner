@@ -229,16 +229,17 @@ jobs:
         run: |
           set -euo pipefail
 
-          maintenance="$(gh api --paginate --slurp \
+          rules="$(gh api --paginate --slurp \
             "repos/${TARGET_REPOSITORY}/issues?state=open&labels=security-scan,surface%3Adeps&per_page=100" \
             | jq -c 'if any(.[][];
                 .user.login == "tamura09-security-scan[bot]"
                 and .pull_request == null
                 and ([.labels[].name] | index("false-positive") == null and index("accepted-risk") == null))
-              then {lockFileMaintenance: {enabled: true, schedule: ["at any time"], minimumReleaseAge: null,
-                    prConcurrentLimit: 0, automerge: false}}
-              else {} end')"
-          echo "force=${maintenance}" >> "${GITHUB_OUTPUT}"
+              then [{matchUpdateTypes: ["lockFileMaintenance"],
+                     force: {enabled: true, schedule: ["at any time"], minimumReleaseAge: null,
+                             prConcurrentLimit: 0, automerge: false}}]
+              else [] end')"
+          echo "package_rules=${rules}" >> "${GITHUB_OUTPUT}"
 
       # 4つの action の digest は Renovate 自身が追う。共有プリセットが
       # github-actions の digest 更新をグループに含めている。版は `uses:` の行末に
@@ -259,8 +260,8 @@ jobs:
           # これが無いと .terraform.lock.hcl や package-lock.json を更新できない。
           RENOVATE_BINARY_SOURCE: install
 
-          # リポジトリ側の extends 解決後にも緊急設定を優先する。
-          RENOVATE_FORCE: ${{ steps.security_findings.outputs.force }}
+          # lockfile 更新だけを強制し、既定のブランチ名や repo 固有の設定は維持する。
+          RENOVATE_PACKAGE_RULES: ${{ steps.security_findings.outputs.package_rules }}
 
           RENOVATE_DRY_RUN: ${{ inputs.dry_run && 'full' || 'null' }}
           LOG_LEVEL: info
