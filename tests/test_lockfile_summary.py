@@ -207,6 +207,14 @@ class GitHubTests(unittest.TestCase):
         self.assertEqual(config["extends"], ["github>tamura09/renovate-runner//presets/default.json5"])
         self.assertNotIn("{{", config["packageRules"][0]["prBodyNotes"][0])
         self.assertEqual(config["packageRules"][0]["matchUpdateTypes"], ["lockFileMaintenance"])
+        self.assertEqual(config["packageRules"][0]["matchBaseBranches"], ["main"])
+
+    def test_multiple_maintenance_prs_do_not_inject_another_prs_summary(self):
+        canonical = self.pr()
+        canonical["body"] = summary.START + "private dependency versions" + summary.END
+        variant = self.pr()
+        variant["head"]["ref"] += "-variant"
+        self.assertEqual(self.prepared_config([canonical, variant])["packageRules"], [])
 
     def test_native_rules_without_owned_summary_leave_rules_empty(self):
         self.assertEqual(self.prepared_config([self.pr()])["packageRules"], [])

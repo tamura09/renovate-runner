@@ -212,14 +212,15 @@ def prepare_rules(repo, prs):
     """Keep the existing canonical PR summary in Renovate's native notes."""
     rules = []
     candidates = [pr for pr in prs if pr["head"]["ref"] == "renovate/lock-file-maintenance"]
-    if len(candidates) == 1:
+    if len(prs) == 1 and len(candidates) == 1:
         body = candidates[0].get("body") or ""
         strip_summary(body)  # Validate marker ownership before reuse.
         match = re.search(re.escape(START) + r".*?" + re.escape(END), body, flags=re.S)
         if match:
             # Notes are Handlebars templates. Never interpret lockfile data as a template.
             note = match.group().replace("{", "&#123;").replace("}", "&#125;")
-            rules.append({"matchUpdateTypes": ["lockFileMaintenance"], "prBodyNotes": [note]})
+            rules.append({"matchUpdateTypes": ["lockFileMaintenance"],
+                          "matchBaseBranches": ["main"], "prBodyNotes": [note]})
     # The action mounts only its configuration file into the Renovate container.
     # Put notes in that file, never in step env or outputs (which Actions logs).
     from pathlib import Path
