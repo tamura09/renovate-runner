@@ -143,10 +143,8 @@ jobs:
       - name: Install lockfile summary dependencies
         id: summary_dependencies
         continue-on-error: true
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_URL: ''
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
         run: |
+          unset ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_ID_TOKEN_REQUEST_TOKEN
           python3 -m venv "${RUNNER_TEMP}/lockfile-summary-venv"
           "${RUNNER_TEMP}/lockfile-summary-venv/bin/pip" install --require-hashes --only-binary=:all: -r requirements.txt
 
@@ -269,11 +267,11 @@ jobs:
         id: lockfile_notes
         continue-on-error: true
         env:
-          ACTIONS_ID_TOKEN_REQUEST_URL: ''
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           TARGET_REPOSITORY: ${{ matrix.repository }}
-        run: '"${RUNNER_TEMP}/lockfile-summary-venv/bin/python" scripts/lockfile_summary.py --prepare-rules'
+        run: |
+          unset ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_ID_TOKEN_REQUEST_TOKEN
+          "${RUNNER_TEMP}/lockfile-summary-venv/bin/python" scripts/lockfile_summary.py --prepare-rules
 
       # 4つの action の digest は Renovate 自身が追う。共有プリセットが
       # github-actions の digest 更新をグループに含めている。版は `uses:` の行末に
@@ -306,9 +304,8 @@ jobs:
       - name: Summarize lockfile version changes
         if: ${{ !inputs.dry_run && steps.summary_dependencies.outcome == 'success' }}
         env:
-          ACTIONS_ID_TOKEN_REQUEST_URL: ''
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           TARGET_REPOSITORY: ${{ matrix.repository }}
         run: |
+          unset ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_ID_TOKEN_REQUEST_TOKEN
           "${RUNNER_TEMP}/lockfile-summary-venv/bin/python" scripts/lockfile_summary.py
