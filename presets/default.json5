@@ -71,6 +71,19 @@
     automerge: false,
   },
 
+  // Go の依存を上げたあとに `go mod tidy` を走らせる。
+  //
+  // 既定の gomod は `go get` だけで、更新した版が新たに引く依存の go.sum 行が
+  // 揃わないことがある。その場合 PR は作られるが、CI の go build / go test が
+  // `missing go.sum entry` で落ちて、手で tidy してから取り込むことになる。
+  //
+  // go 本体はワークフローの binarySource: install で、go.mod の toolchain 行の版を
+  // containerbase が GitHub Releases から都度入れている。そのダウンロードが
+  // 一時的に失敗すると (2026-11-09 に 504 を観測)、go.mod だけ上がった PR に
+  // 「Artifact update problem」が付き、`spawn go ENOENT` と出る。これは設定では
+  // 直らないので、PR 本文の rebase/retry のチェックボックスで作り直す。
+  postUpdateOptions: ['gomodTidy'],
+
   // 上の :semanticCommitTypeAll(chore) は「semantic commit を使うなら type は chore」
   // という指定でしかない。使うかどうかは既定では自動判定で、リポジトリの既存コミットが
   // Conventional Commits で揃っているかを見る。そのため初回の実行では
