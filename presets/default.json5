@@ -157,6 +157,39 @@
     minimumReleaseAge: null,
   },
 
+  // ワークフローの `run:` で `npm install --global <pkg>@<ver>` と版を固定した
+  // CLI も追う。
+  //
+  // github-actions マネージャが読むのは `uses:`・`runs-on`・setup-* の版だけで、
+  // シェルスクリプトの中は見ない。tamura09/pr-review は Codex CLI を
+  // `npm install --global @openai/codex@0.162.0` で入れていたが、Dependency
+  // Dashboard の Detected Dependencies にも載らず、更新 PR は一度も出なかった。
+  // 新しいモデル (gpt-6.2-astra) が model_not_found で落ちて初めて古さに気づいた。
+  //
+  // 版は npm から引くので、公開日時があり minimumReleaseAge もそのまま効く。
+  // 拾うのは `npm install --global <pkg>@<ver>` の形だけ (`install` は `i`、
+  // `--global` は `-g` でもよい)。フラグを `install` の直後に置き、1つのコマンドで
+  // 入れるパッケージは1つにする。`npm i foo@1 -g`、`-g` と名前の間に別の
+  // オプションを挟む書き方、`--location=global`、`npm i -g a@1 b@2` の2つ目は
+  // 拾わない。書き方の組み合わせを全部許すと、ほかのコマンドの引数まで拾い
+  // かねないので、ワークフロー側をこの形に揃える。リポジトリ内の package.json に
+  // 載る依存は npm マネージャが別に見ている。
+  //
+  // パッケージ名と版は、それぞれに使える文字だけを取る。空白以外を全部取ると、
+  // `run: "npm i -g foo@1.2.3"` や `foo@1.2.3;` で版が `1.2.3"` になる。
+  // 既定の semver-coerced はそれも版として受け付けるので、更新のときに
+  // 引用符ごと置き換えて YAML を壊す。
+  customManagers: [
+    {
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)\\.github/workflows/[^/]+\\.ya?ml$/'],
+      matchStrings: [
+        'npm[ \\t]+(?:install|i)[ \\t]+(?:--global|-g)[ \\t]+[\'"]?(?<depName>(?:@[\\w.-]+/)?[\\w.-]+)@(?<currentValue>\\d[\\w.+-]*)',
+      ],
+      datasourceTemplate: 'npm',
+    },
+  ],
+
   packageRules: [
     // メジャーはグループに入れず個別の PR にする。破壊的変更を1つずつ読むため。
     // マイナーとパッチはまとめて1本にする。
