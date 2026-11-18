@@ -167,7 +167,12 @@
   // 新しいモデル (gpt-6.2-astra) が model_not_found で落ちて初めて古さに気づいた。
   //
   // 版は npm から引くので、公開日時があり minimumReleaseAge もそのまま効く。
-  // `--global` / `-g` を付けた行だけを対象にする。リポジトリ内の package.json に
+  // 拾うのは `npm install --global <pkg>@<ver>` の形だけ (`install` は `i`、
+  // `--global` は `-g` でもよい)。フラグを `install` の直後に置き、1つのコマンドで
+  // 入れるパッケージは1つにする。`npm i foo@1 -g`、`-g` と名前の間に別の
+  // オプションを挟む書き方、`--location=global`、`npm i -g a@1 b@2` の2つ目は
+  // 拾わない。書き方の組み合わせを全部許すと、ほかのコマンドの引数まで拾い
+  // かねないので、ワークフロー側をこの形に揃える。リポジトリ内の package.json に
   // 載る依存は npm マネージャが別に見ている。
   //
   // パッケージ名と版は、それぞれに使える文字だけを取る。空白以外を全部取ると、
@@ -179,7 +184,7 @@
       customType: 'regex',
       managerFilePatterns: ['/(^|/)\\.github/workflows/[^/]+\\.ya?ml$/'],
       matchStrings: [
-        'npm (?:install|i) (?:--global|-g) [\'"]?(?<depName>(?:@[\\w.-]+/)?[\\w.-]+)@(?<currentValue>\\d[\\w.+-]*)',
+        'npm[ \\t]+(?:install|i)[ \\t]+(?:--global|-g)[ \\t]+[\'"]?(?<depName>(?:@[\\w.-]+/)?[\\w.-]+)@(?<currentValue>\\d[\\w.+-]*)',
       ],
       datasourceTemplate: 'npm',
     },
