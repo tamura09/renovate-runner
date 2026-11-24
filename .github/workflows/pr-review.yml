@@ -53,4 +53,4 @@ jobs:
     # 版のコメントは同じ行の末尾に置く。Renovate の github-actions マネージャは
     # そこからしかタグを読まない。前の行に書くと、どのタグの digest なのかを
     # 解決できず、v1 ではなくデフォルトブランチの先頭を追いにいく。
-    uses: tamura09/pr-review/.github/workflows/pr-review.yml@0ea6a7c2e683d0ca8e51955e1358556dc8ddae3c # v1
+    uses: tamura09/pr-review/.github/workflows/pr-review.yml@5b31ff996caf901ef7068f72acea6d32b84e2979 # v1
